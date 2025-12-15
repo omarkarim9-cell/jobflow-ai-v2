@@ -1,0 +1,524 @@
+
+import React, { useState, useEffect } from 'react';
+import { UserProfile, Job } from '../types';
+import { Save, User, Briefcase, FileText, HardDrive, Download, File, Globe, Languages, Upload, AlertTriangle, RotateCcw, Database, XCircle, CheckCircle2, FileJson } from 'lucide-react';
+import { writeFileToDirectory } from '../services/fileSystemService';
+import { NotificationType } from './NotificationToast';
+import { translations, LanguageCode } from '../services/localization';
+import { isProductionMode, configureSupabase, clearSupabaseConfig } from '../services/supabaseClient';
+
+interface SettingsProps {
+  userProfile: UserProfile;
+  onUpdate: (profile: UserProfile) => void;
+  dirHandle: any;
+  onDirHandleChange: (handle: any) => void;
+  jobs: Job[];
+  showNotification: (msg: string, type: NotificationType) => void;
+  onReset: () => void;
+}
+
+export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHandle, onDirHandleChange, jobs, showNotification, onReset }) => {
+  const [formData, setFormData] = useState(userProfile);
+  
+  // Local state for raw text inputs
+  const [rolesInput, setRolesInput] = useState(userProfile.preferences.targetRoles.join(', '));
+  const [locationsInput, setLocationsInput] = useState(userProfile.preferences.targetLocations.join(', '));
+
+  const [isDirty, setIsDirty] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  
+  // DB Config State
+  const [dbUrl, setDbUrl] = useState('');
+  const [dbKey, setDbKey] = useState('');
+  
+  // Localization Helper
+  const lang = (userProfile.preferences.language as LanguageCode) || 'en';
+  const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
+  const isRtl = lang === 'ar';
+
+  useEffect(() => {
+      setFormData(userProfile);
+      
+      setRolesInput(userProfile.preferences.targetRoles.join(', '));
+      setLocationsInput(userProfile.preferences.targetLocations.join(', '));
+
+      const storedUrl = localStorage.getItem('jobflow_sb_url');
+      const storedKey = localStorage.getItem('jobflow_sb_key');
+      if (storedUrl) setDbUrl(storedUrl);
+      if (storedKey) setDbKey(storedKey);
+  }, [userProfile]);
+
+  useEffect(() => {
+     let updated = false;
+     const newPrefs = { ...formData.preferences };
+
+     if (!newPrefs.shareUrl) {
+         newPrefs.shareUrl = window.location.origin;
+         updated = true;
+     }
+     if (!newPrefs.language) {
+         newPrefs.language = 'en';
+         updated = true;
+     }
+
+     if (updated) {
+         const updatedProfile = { ...formData, preferences: newPrefs };
+         setFormData(updatedProfile);
+         onUpdate(updatedProfile);
+     }
+  }, []);
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setIsDirty(true);
+    setShowSuccess(false);
+  };
+
+  const handlePrefChange = (field: string, value: any) => {
+      setFormData(prev => ({
+          ...prev,
+          preferences: { ...prev.preferences, [field]: value }
+      }));
+      setIsDirty(true);
+      setShowSuccess(false);
+  };
+
+  const handleRolesChange = (val: string) => {
+      setRolesInput(val);
+      const cleanArray = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      setFormData(prev => ({
+          ...prev,
+          preferences: { ...prev.preferences, targetRoles: cleanArray }
+      }));
+      setIsDirty(true);
+      setShowSuccess(false);
+  };
+
+  const handleLocationsChange = (val: string) => {
+      setLocationsInput(val);
+      const cleanArray = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      setFormData(prev => ({
+          ...prev,
+          preferences: { ...prev.preferences, targetLocations: cleanArray }
+      }));
+      setIsDirty(true);
+      setShowSuccess(false);
+  };
+
+  const handleSave = () => {
+      onUpdate(formData);
+      setIsDirty(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      showNotification("Preferences saved successfully.", 'success');
+  };
+  
+  const handleSaveDb = () => {
+      if (dbUrl && dbKey) {
+          // Connecting explicitly means we want online mode, so remove forced offline flag
+          localStorage.removeItem('jobflow_force_offline');
+          configureSupabase(dbUrl, dbKey);
+          window.location.reload(); // Reload to re-init client
+      }
+  };
+  
+  const handleDisconnectDb = () => {
+      if(window.confirm("Disconnect from database and return to Demo Mode?")) {
+          // Disconnecting means we want offline mode
+          // clearSupabaseConfig now handles setting the offline flag
+          clearSupabaseConfig();
+          window.location.reload();
+      }
+  };
+  
+  const handleRepairProfile = async () => {
+    if(window.confirm("This will FORCE RESET job preferences in the database.")) {
+        const cleanProfile: UserProfile = {
+            ...userProfile,
+            preferences: {
+                ...userProfile.preferences,
+                targetRoles: [],
+                targetLocations: []
+            }
+        };
+        
+        // Update Local
+        setFormData(cleanProfile);
+        setRolesInput("");
+        setLocationsInput("");
+        
+        // Update Parent (App.tsx)
+        onUpdate(cleanProfile);
+        
+        showNotification("Profile data reset command sent.", 'success');
+    }
+  };
+
+  const handleSyncToDisk = async () => {
+      if (!dirHandle) return;
+      try {
+          const data = JSON.stringify(jobs, null, 2);
+          await writeFileToDirectory(dirHandle, 'jobs_export.json', data);
+          showNotification("Exported 'jobs_export.json' to workspace.", 'success');
+      } catch (e) {
+          showNotification("Failed to write to disk.", 'error');
+      }
+  };
+
+  const handleDownloadHandover = () => {
+      const element = document.createElement("a");
+      // Use the content directly or fetch if needed, here we simulate the download of the file we just created
+      // Since we can't read the file system directly in this context easily without setup, 
+      // we will trigger a download of the known content or the file if it exists.
+      // For this UI, we will just link to the PROJECT_HANDOVER.md if possible, or alert.
+      
+      // In a real app we would read the file. Here we will alert users to check the file list.
+      alert("The file 'PROJECT_HANDOVER.md' has been generated in your file list. Please copy its content for the next AI.");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+  
+      if (file.type === "text/plain") {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              const text = event.target?.result as string;
+              
+              const updatedProfile = { 
+                  ...formData, 
+                  resumeContent: text,
+                  resumeFileName: file.name
+              };
+              setFormData(updatedProfile);
+              onUpdate(updatedProfile);
+              
+              setIsDirty(false);
+              showNotification("Resume uploaded and saved successfully", 'success');
+          };
+          reader.readAsText(file);
+      } else {
+          showNotification("Please upload a .txt file", 'error');
+      }
+      e.target.value = '';
+  };
+
+  const handleClearResume = () => {
+      if(window.confirm("Are you sure you want to clear your Master Resume?")) {
+          const updatedProfile = { ...formData, resumeContent: '', resumeFileName: undefined };
+          setFormData(updatedProfile);
+          onUpdate(updatedProfile);
+          setIsDirty(false);
+          showNotification("Resume cleared", 'success');
+      }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Header */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900 flex items-center">
+            <User className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+            {t('settings_title')}
+        </h2>
+        <p className="text-sm text-slate-500 mt-1">{t('settings_desc')}</p>
+      </div>
+
+      {/* Database Connection */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center">
+                   <Database className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+                   Database Connection
+              </h3>
+              {isProductionMode() ? (
+                  <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded border border-green-200 flex items-center">
+                      <CheckCircle2 className="w-3 h-3 mr-1"/> Connected
+                  </span>
+              ) : (
+                  <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded border border-amber-200 flex items-center">
+                      <XCircle className="w-3 h-3 mr-1"/> Disconnected (Demo Mode)
+                  </span>
+              )}
+          </div>
+          
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                   <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Supabase URL</label>
+                       <input 
+                          type="text" 
+                          value={dbUrl}
+                          onChange={(e) => setDbUrl(e.target.value)}
+                          disabled={isProductionMode()}
+                          className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono disabled:opacity-50"
+                          placeholder="https://..."
+                       />
+                   </div>
+                   <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Anon Key</label>
+                       <input 
+                          type="password" 
+                          value={dbKey}
+                          onChange={(e) => setDbKey(e.target.value)}
+                          disabled={isProductionMode()}
+                          className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono disabled:opacity-50"
+                          placeholder="eyJh..."
+                       />
+                   </div>
+               </div>
+               
+               <div className="flex justify-end">
+                   {isProductionMode() ? (
+                       <button onClick={handleDisconnectDb} className="text-xs text-red-600 font-bold hover:underline">
+                           Disconnect & Switch to Local Storage
+                       </button>
+                   ) : (
+                       <button onClick={handleSaveDb} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700">
+                           Connect to Cloud
+                       </button>
+                   )}
+               </div>
+          </div>
+      </div>
+
+      {/* Language Selector */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div className="flex items-center">
+             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                 <Languages className="w-6 h-6" />
+             </div>
+             <div>
+                 <h3 className="text-sm font-bold text-slate-900">{t('lang_label')}</h3>
+                 <p className="text-xs text-slate-500">
+                     {userProfile.preferences.language === 'en' ? 'English' : 
+                      userProfile.preferences.language === 'es' ? 'Español' : 
+                      userProfile.preferences.language === 'fr' ? 'Français' : 
+                      userProfile.preferences.language === 'de' ? 'Deutsch' : 'العربية'}
+                 </p>
+             </div>
+          </div>
+          <div className="flex items-center bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
+              <Globe className="w-4 h-4 text-slate-500 mx-1" />
+              <select 
+                  value={userProfile.preferences.language}
+                  onChange={(e) => handlePrefChange('language', e.target.value)}
+                  className="bg-transparent text-sm font-medium text-slate-700 outline-none py-1 cursor-pointer"
+              >
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="fr">Français</option>
+                  <option value="de">Deutsch</option>
+                  <option value="ar">العربية</option>
+              </select>
+          </div>
+      </div>
+
+      {/* Preferences Form */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center mb-6">
+             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                 <Briefcase className="w-6 h-6" />
+             </div>
+             <div>
+                 <h3 className="text-lg font-bold text-slate-900">{t('pref_title')}</h3>
+                 <p className="text-sm text-slate-500">Customize what jobs the AI looks for.</p>
+             </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div>
+               <label className="block text-sm font-bold text-slate-700 mb-2">{t('target_roles')}</label>
+               <input 
+                  type="text" 
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={rolesInput}
+                  onChange={(e) => handleRolesChange(e.target.value)}
+                  placeholder="e.g. Frontend Developer, React Engineer"
+               />
+               <p className="text-xs text-slate-400 mt-1">Separate multiple roles with commas.</p>
+           </div>
+           
+           <div>
+               <label className="block text-sm font-bold text-slate-700 mb-2">{t('target_loc')}</label>
+               <input 
+                  type="text" 
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={locationsInput}
+                  onChange={(e) => handleLocationsChange(e.target.value)}
+                  placeholder="e.g. Remote, New York, London"
+               />
+               <p className="text-xs text-slate-400 mt-1">Leave empty for any location.</p>
+           </div>
+
+           <div>
+               <label className="block text-sm font-bold text-slate-700 mb-2">{t('min_salary')}</label>
+               <input 
+                  type="text" 
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={formData.preferences.minSalary}
+                  onChange={(e) => handlePrefChange('minSalary', e.target.value)}
+                  placeholder="e.g. $80,000"
+               />
+           </div>
+
+           <div className="flex items-center h-full pt-6">
+               <label className="flex items-center cursor-pointer p-3 bg-slate-50 rounded-xl w-full border border-slate-200 hover:border-indigo-300 transition-colors">
+                   <input 
+                      type="checkbox" 
+                      className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                      checked={formData.preferences.remoteOnly}
+                      onChange={(e) => handlePrefChange('remoteOnly', e.target.checked)}
+                   />
+                   <span className={`text-slate-700 font-medium ${isRtl ? 'mr-3' : 'ml-3'}`}>{t('remote_only')}</span>
+               </label>
+           </div>
+        </div>
+      </div>
+
+      {/* Resume Upload */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center">
+                <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                    <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold text-slate-900">Master Resume</h3>
+                    <p className="text-sm text-slate-500">The base content used for AI customization.</p>
+                </div>
+            </div>
+            {formData.resumeContent && (
+                <button onClick={handleClearResume} className="text-xs text-red-500 hover:underline">Clear Resume</button>
+            )}
+        </div>
+
+        <div className="space-y-4">
+             {/* File Upload Area */}
+             <div className="relative group">
+                <input 
+                    type="file" 
+                    accept=".txt"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                />
+                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 group-hover:border-indigo-500 group-hover:bg-indigo-50 transition-all flex flex-col items-center justify-center">
+                    <Upload className="w-8 h-8 text-indigo-400 mb-2 group-hover:scale-110 transition-transform"/>
+                    <span className="text-sm font-medium text-slate-600">
+                        {formData.resumeFileName ? `Replace ${formData.resumeFileName}` : "Upload .txt file"}
+                    </span>
+                    <span className="text-xs text-slate-400 mt-1">Click or drag & drop</span>
+                </div>
+            </div>
+
+            <div className="relative">
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                    Raw Content (Editable)
+                </label>
+                <textarea 
+                    className="w-full h-48 p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
+                    value={formData.resumeContent}
+                    onChange={(e) => handleChange('resumeContent', e.target.value)}
+                    placeholder="Paste your resume text here if you don't have a file..."
+                />
+            </div>
+        </div>
+      </div>
+
+      {/* Virtual Workspace */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center mb-6">
+             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                 <HardDrive className="w-6 h-6" />
+             </div>
+             <div>
+                 <h3 className="text-lg font-bold text-slate-900">Workspace</h3>
+                 <p className="text-sm text-slate-500">Manage your local data export.</p>
+             </div>
+        </div>
+        
+        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="flex items-center">
+                <div className={`w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 text-slate-400 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                    <File className="w-5 h-5" />
+                </div>
+                <div>
+                    <div className="font-medium text-slate-900">Local Data Access</div>
+                    <div className="text-xs text-slate-500 flex items-center">
+                        {dirHandle ? (
+                            <span className="text-green-600 flex items-center font-bold">
+                                <CheckCircle2 className="w-3 h-3 mr-1" /> Active: {dirHandle.name}
+                            </span>
+                        ) : (
+                            <span className="text-amber-500 flex items-center">Not Connected</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+            
+            <div className="flex gap-2">
+                <button 
+                    onClick={handleDownloadHandover}
+                    className="bg-white border border-indigo-200 text-indigo-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-50 flex items-center shadow-sm"
+                    title="Copy full project history for next LLM"
+                >
+                    <FileJson className={`w-4 h-4 ${isRtl ? 'ml-2' : 'mr-2'}`} /> Context
+                </button>
+                <button 
+                    onClick={handleSyncToDisk}
+                    disabled={!dirHandle}
+                    className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 flex items-center shadow-sm"
+                >
+                    <Download className={`w-4 h-4 ${isRtl ? 'ml-2' : 'mr-2'}`} /> Export Jobs
+                </button>
+            </div>
+        </div>
+      </div>
+      
+      {/* Danger Zone */}
+      <div className="mt-8 border-t border-red-100 pt-8">
+          <div className="bg-red-50 p-6 rounded-xl border border-red-100">
+               <h3 className="text-red-800 font-bold mb-2 flex items-center">
+                   <AlertTriangle className="w-5 h-5 mr-2" /> Danger Zone
+               </h3>
+               <p className="text-sm text-red-600 mb-4">
+                   Trouble clearing settings? Use this to force-reset your profile data.
+               </p>
+               <div className="flex space-x-4">
+                   <button 
+                        onClick={handleRepairProfile}
+                        className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-50 flex items-center"
+                   >
+                       <RotateCcw className="w-4 h-4 mr-2" /> Repair Profile Data
+                   </button>
+                   
+                   <button 
+                        onClick={onReset}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 flex items-center shadow-sm"
+                   >
+                       <RotateCcw className="w-4 h-4 mr-2" /> Reset App & Logout
+                   </button>
+               </div>
+          </div>
+      </div>
+
+      {/* Sticky Save Button */}
+      <div className={`fixed bottom-6 ${isRtl ? 'left-6' : 'right-6'} z-30 transition-transform duration-300 ${isDirty ? 'translate-y-0' : 'translate-y-24'}`}>
+          <button 
+              onClick={handleSave}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all flex items-center"
+          >
+              <Save className={`w-5 h-5 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+              Save Changes
+          </button>
+      </div>
+
+      {showSuccess && (
+          <div className={`fixed bottom-6 ${isRtl ? 'left-6' : 'right-6'} z-30 bg-green-600 text-white px-6 py-3 rounded-full font-bold shadow-xl flex items-center animate-in slide-in-from-bottom-10 fade-in`}>
+              <CheckCircle2 className={`w-5 h-5 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+              Saved Successfully
+          </div>
+      )}
+    </div>
+  );
+};
