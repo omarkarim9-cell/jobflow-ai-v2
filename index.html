@@ -16,7 +16,6 @@
       .cl-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
     </style>
     <script>
-      // Shim process.env for environments that don't provide it
       window.process = window.process || { env: {} };
     </script>
     <script type="importmap">
@@ -37,5 +36,6 @@
   </head>
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
