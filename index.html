@@ -15,25 +15,27 @@
       .cl-rootBox { width: 100%; }
       .cl-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.2.0",
-    "react/": "https://esm.sh/react@19.2.0/",
-    "react-dom": "https://esm.sh/react-dom@19.2.0",
-    "react-dom/": "https://esm.sh/react-dom@19.2.0/",
-    "@clerk/clerk-react": "https://esm.sh/@clerk/clerk-react@5.21.0?external=react,react-dom",
-    "lucide-react": "https://esm.sh/lucide-react@0.460.0",
-    "@google/genai": "https://esm.sh/@google/genai@1.30.0",
-    "recharts": "https://esm.sh/recharts@2.13.3",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <script>
+      // Shim process.env for environments that don't provide it
+      window.process = window.process || { env: {} };
+    </script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.3.1",
+        "react/": "https://esm.sh/react@18.3.1/",
+        "react-dom": "https://esm.sh/react-dom@18.3.1",
+        "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+        "@clerk/clerk-react": "https://esm.sh/@clerk/clerk-react@5.21.0?external=react,react-dom",
+        "lucide-react": "https://esm.sh/lucide-react@0.460.0?external=react",
+        "@google/genai": "https://esm.sh/@google/genai@1.30.0",
+        "recharts": "https://esm.sh/recharts@2.13.3?external=react",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.0"
+      }
+    }
+    </script>
+  </head>
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+  </body>
 </html>
