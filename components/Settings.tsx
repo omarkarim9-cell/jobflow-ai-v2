@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Job } from '../types';
-import { Save, User, Briefcase, FileText, HardDrive, Download, File, Globe, Languages, Upload, AlertTriangle, RotateCcw, Database, XCircle, CheckCircle2, FileJson } from 'lucide-react';
+import { Save, User, Briefcase, FileText, HardDrive, Download, File, Globe, Languages, Upload, AlertTriangle, RotateCcw, Database, XCircle, CheckCircle2, FileJson, Cloud } from 'lucide-react';
 import { writeFileToDirectory } from '../services/fileSystemService';
 import { NotificationType } from './NotificationToast';
 import { translations, LanguageCode } from '../services/localization';
-import { isProductionMode, configureSupabase, clearSupabaseConfig } from '../services/supabaseClient';
 
 interface SettingsProps {
   userProfile: UserProfile;
@@ -27,10 +25,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
   const [isDirty, setIsDirty] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // DB Config State
-  const [dbUrl, setDbUrl] = useState('');
-  const [dbKey, setDbKey] = useState('');
-  
   // Localization Helper
   const lang = (userProfile.preferences.language as LanguageCode) || 'en';
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
@@ -38,35 +32,9 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
 
   useEffect(() => {
       setFormData(userProfile);
-      
       setRolesInput(userProfile.preferences.targetRoles.join(', '));
       setLocationsInput(userProfile.preferences.targetLocations.join(', '));
-
-      const storedUrl = localStorage.getItem('jobflow_sb_url');
-      const storedKey = localStorage.getItem('jobflow_sb_key');
-      if (storedUrl) setDbUrl(storedUrl);
-      if (storedKey) setDbKey(storedKey);
   }, [userProfile]);
-
-  useEffect(() => {
-     let updated = false;
-     const newPrefs = { ...formData.preferences };
-
-     if (!newPrefs.shareUrl) {
-         newPrefs.shareUrl = window.location.origin;
-         updated = true;
-     }
-     if (!newPrefs.language) {
-         newPrefs.language = 'en';
-         updated = true;
-     }
-
-     if (updated) {
-         const updatedProfile = { ...formData, preferences: newPrefs };
-         setFormData(updatedProfile);
-         onUpdate(updatedProfile);
-     }
-  }, []);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -91,7 +59,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           preferences: { ...prev.preferences, targetRoles: cleanArray }
       }));
       setIsDirty(true);
-      setShowSuccess(false);
   };
 
   const handleLocationsChange = (val: string) => {
@@ -102,7 +69,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           preferences: { ...prev.preferences, targetLocations: cleanArray }
       }));
       setIsDirty(true);
-      setShowSuccess(false);
   };
 
   const handleSave = () => {
@@ -113,26 +79,8 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
       showNotification("Preferences saved successfully.", 'success');
   };
   
-  const handleSaveDb = () => {
-      if (dbUrl && dbKey) {
-          // Connecting explicitly means we want online mode, so remove forced offline flag
-          localStorage.removeItem('jobflow_force_offline');
-          configureSupabase(dbUrl, dbKey);
-          window.location.reload(); // Reload to re-init client
-      }
-  };
-  
-  const handleDisconnectDb = () => {
-      if(window.confirm("Disconnect from database and return to Demo Mode?")) {
-          // Disconnecting means we want offline mode
-          // clearSupabaseConfig now handles setting the offline flag
-          clearSupabaseConfig();
-          window.location.reload();
-      }
-  };
-  
   const handleRepairProfile = async () => {
-    if(window.confirm("This will FORCE RESET job preferences in the database.")) {
+    if(window.confirm("This will reset your job preferences. Continue?")) {
         const cleanProfile: UserProfile = {
             ...userProfile,
             preferences: {
@@ -141,16 +89,10 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                 targetLocations: []
             }
         };
-        
-        // Update Local
-        setFormData(cleanProfile);
         setRolesInput("");
         setLocationsInput("");
-        
-        // Update Parent (App.tsx)
         onUpdate(cleanProfile);
-        
-        showNotification("Profile data reset command sent.", 'success');
+        showNotification("Profile data reset.", 'success');
     }
   };
 
@@ -165,17 +107,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
       }
   };
 
-  const handleDownloadHandover = () => {
-      const element = document.createElement("a");
-      // Use the content directly or fetch if needed, here we simulate the download of the file we just created
-      // Since we can't read the file system directly in this context easily without setup, 
-      // we will trigger a download of the known content or the file if it exists.
-      // For this UI, we will just link to the PROJECT_HANDOVER.md if possible, or alert.
-      
-      // In a real app we would read the file. Here we will alert users to check the file list.
-      alert("The file 'PROJECT_HANDOVER.md' has been generated in your file list. Please copy its content for the next AI.");
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -184,33 +115,19 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           const reader = new FileReader();
           reader.onload = (event) => {
               const text = event.target?.result as string;
-              
               const updatedProfile = { 
                   ...formData, 
                   resumeContent: text,
                   resumeFileName: file.name
               };
-              setFormData(updatedProfile);
               onUpdate(updatedProfile);
-              
-              setIsDirty(false);
-              showNotification("Resume uploaded and saved successfully", 'success');
+              showNotification("Resume uploaded successfully", 'success');
           };
           reader.readAsText(file);
       } else {
           showNotification("Please upload a .txt file", 'error');
       }
       e.target.value = '';
-  };
-
-  const handleClearResume = () => {
-      if(window.confirm("Are you sure you want to clear your Master Resume?")) {
-          const updatedProfile = { ...formData, resumeContent: '', resumeFileName: undefined };
-          setFormData(updatedProfile);
-          onUpdate(updatedProfile);
-          setIsDirty(false);
-          showNotification("Resume cleared", 'success');
-      }
   };
 
   return (
@@ -224,60 +141,25 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
         <p className="text-sm text-slate-500 mt-1">{t('settings_desc')}</p>
       </div>
 
-      {/* Database Connection */}
+      {/* Database Connection Status */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-900 flex items-center">
-                   <Database className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
-                   Database Connection
+                   <Cloud className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+                   Neon Cloud Sync
               </h3>
-              {isProductionMode() ? (
-                  <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded border border-green-200 flex items-center">
-                      <CheckCircle2 className="w-3 h-3 mr-1"/> Connected
-                  </span>
-              ) : (
-                  <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded border border-amber-200 flex items-center">
-                      <XCircle className="w-3 h-3 mr-1"/> Disconnected (Demo Mode)
-                  </span>
-              )}
+              <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded border border-green-200 flex items-center">
+                  <CheckCircle2 className="w-3 h-3 mr-1"/> Verified via Clerk
+              </span>
           </div>
           
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                   <div>
-                       <label className="block text-xs font-bold text-slate-700 mb-1">Supabase URL</label>
-                       <input 
-                          type="text" 
-                          value={dbUrl}
-                          onChange={(e) => setDbUrl(e.target.value)}
-                          disabled={isProductionMode()}
-                          className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono disabled:opacity-50"
-                          placeholder="https://..."
-                       />
-                   </div>
-                   <div>
-                       <label className="block text-xs font-bold text-slate-700 mb-1">Anon Key</label>
-                       <input 
-                          type="password" 
-                          value={dbKey}
-                          onChange={(e) => setDbKey(e.target.value)}
-                          disabled={isProductionMode()}
-                          className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono disabled:opacity-50"
-                          placeholder="eyJh..."
-                       />
-                   </div>
-               </div>
-               
-               <div className="flex justify-end">
-                   {isProductionMode() ? (
-                       <button onClick={handleDisconnectDb} className="text-xs text-red-600 font-bold hover:underline">
-                           Disconnect & Switch to Local Storage
-                       </button>
-                   ) : (
-                       <button onClick={handleSaveDb} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700">
-                           Connect to Cloud
-                       </button>
-                   )}
+               <p className="text-sm text-slate-600">
+                   Your profile and job data are automatically synchronized with your <strong>Neon PostgreSQL</strong> database using your secure Clerk session.
+               </p>
+               <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                   <Database className="w-3 h-3" />
+                   <span>Endpoint: /api/profile</span>
                </div>
           </div>
       </div>
@@ -336,7 +218,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                   onChange={(e) => handleRolesChange(e.target.value)}
                   placeholder="e.g. Frontend Developer, React Engineer"
                />
-               <p className="text-xs text-slate-400 mt-1">Separate multiple roles with commas.</p>
+               <p className="text-xs text-slate-400 mt-1">Separate roles with commas.</p>
            </div>
            
            <div>
@@ -346,32 +228,8 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                   className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={locationsInput}
                   onChange={(e) => handleLocationsChange(e.target.value)}
-                  placeholder="e.g. Remote, New York, London"
+                  placeholder="e.g. Remote, New York"
                />
-               <p className="text-xs text-slate-400 mt-1">Leave empty for any location.</p>
-           </div>
-
-           <div>
-               <label className="block text-sm font-bold text-slate-700 mb-2">{t('min_salary')}</label>
-               <input 
-                  type="text" 
-                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={formData.preferences.minSalary}
-                  onChange={(e) => handlePrefChange('minSalary', e.target.value)}
-                  placeholder="e.g. $80,000"
-               />
-           </div>
-
-           <div className="flex items-center h-full pt-6">
-               <label className="flex items-center cursor-pointer p-3 bg-slate-50 rounded-xl w-full border border-slate-200 hover:border-indigo-300 transition-colors">
-                   <input 
-                      type="checkbox" 
-                      className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
-                      checked={formData.preferences.remoteOnly}
-                      onChange={(e) => handlePrefChange('remoteOnly', e.target.checked)}
-                   />
-                   <span className={`text-slate-700 font-medium ${isRtl ? 'mr-3' : 'ml-3'}`}>{t('remote_only')}</span>
-               </label>
            </div>
         </div>
       </div>
@@ -388,13 +246,9 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                     <p className="text-sm text-slate-500">The base content used for AI customization.</p>
                 </div>
             </div>
-            {formData.resumeContent && (
-                <button onClick={handleClearResume} className="text-xs text-red-500 hover:underline">Clear Resume</button>
-            )}
         </div>
 
         <div className="space-y-4">
-             {/* File Upload Area */}
              <div className="relative group">
                 <input 
                     type="file" 
@@ -407,96 +261,36 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                     <span className="text-sm font-medium text-slate-600">
                         {formData.resumeFileName ? `Replace ${formData.resumeFileName}` : "Upload .txt file"}
                     </span>
-                    <span className="text-xs text-slate-400 mt-1">Click or drag & drop</span>
                 </div>
             </div>
 
-            <div className="relative">
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
-                    Raw Content (Editable)
-                </label>
-                <textarea 
-                    className="w-full h-48 p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
-                    value={formData.resumeContent}
-                    onChange={(e) => handleChange('resumeContent', e.target.value)}
-                    placeholder="Paste your resume text here if you don't have a file..."
-                />
-            </div>
+            <textarea 
+                className="w-full h-48 p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
+                value={formData.resumeContent}
+                onChange={(e) => handleChange('resumeContent', e.target.value)}
+                placeholder="Paste your resume text here..."
+            />
         </div>
       </div>
 
-      {/* Virtual Workspace */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center mb-6">
-             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
-                 <HardDrive className="w-6 h-6" />
-             </div>
-             <div>
-                 <h3 className="text-lg font-bold text-slate-900">Workspace</h3>
-                 <p className="text-sm text-slate-500">Manage your local data export.</p>
-             </div>
-        </div>
-        
-        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div className="flex items-center">
-                <div className={`w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 text-slate-400 ${isRtl ? 'ml-4' : 'mr-4'}`}>
-                    <File className="w-5 h-5" />
-                </div>
-                <div>
-                    <div className="font-medium text-slate-900">Local Data Access</div>
-                    <div className="text-xs text-slate-500 flex items-center">
-                        {dirHandle ? (
-                            <span className="text-green-600 flex items-center font-bold">
-                                <CheckCircle2 className="w-3 h-3 mr-1" /> Active: {dirHandle.name}
-                            </span>
-                        ) : (
-                            <span className="text-amber-500 flex items-center">Not Connected</span>
-                        )}
-                    </div>
-                </div>
-            </div>
-            
-            <div className="flex gap-2">
-                <button 
-                    onClick={handleDownloadHandover}
-                    className="bg-white border border-indigo-200 text-indigo-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-50 flex items-center shadow-sm"
-                    title="Copy full project history for next LLM"
-                >
-                    <FileJson className={`w-4 h-4 ${isRtl ? 'ml-2' : 'mr-2'}`} /> Context
-                </button>
-                <button 
-                    onClick={handleSyncToDisk}
-                    disabled={!dirHandle}
-                    className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 flex items-center shadow-sm"
-                >
-                    <Download className={`w-4 h-4 ${isRtl ? 'ml-2' : 'mr-2'}`} /> Export Jobs
-                </button>
-            </div>
-        </div>
-      </div>
-      
       {/* Danger Zone */}
       <div className="mt-8 border-t border-red-100 pt-8">
           <div className="bg-red-50 p-6 rounded-xl border border-red-100">
                <h3 className="text-red-800 font-bold mb-2 flex items-center">
                    <AlertTriangle className="w-5 h-5 mr-2" /> Danger Zone
                </h3>
-               <p className="text-sm text-red-600 mb-4">
-                   Trouble clearing settings? Use this to force-reset your profile data.
-               </p>
                <div className="flex space-x-4">
                    <button 
                         onClick={handleRepairProfile}
                         className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-50 flex items-center"
                    >
-                       <RotateCcw className="w-4 h-4 mr-2" /> Repair Profile Data
+                       <RotateCcw className="w-4 h-4 mr-2" /> Repair Profile
                    </button>
-                   
                    <button 
                         onClick={onReset}
                         className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 flex items-center shadow-sm"
                    >
-                       <RotateCcw className="w-4 h-4 mr-2" /> Reset App & Logout
+                       <RotateCcw className="w-4 h-4 mr-2" /> Sign Out
                    </button>
                </div>
           </div>

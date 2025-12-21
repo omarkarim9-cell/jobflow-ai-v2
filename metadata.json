@@ -1,5 +1,5 @@
 {
-  "name": "JobFlow AI ver 2.6",
-  "description": "updated the rewrite resume/letter from the limited google model to a free tool",
+  "name": "JobFlow AI Pro v3.0",
+  "description": "Enterprise-grade stack upgrade: Clerk Authentication + Neon PostgreSQL Database. Hosted on Vercel.",
   "requestFramePermissions": []
 }

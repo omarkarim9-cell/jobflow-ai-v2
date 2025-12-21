@@ -1,11 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job } from "../types";
-import { localGenerateCoverLetter, localCustomizeResume, localExtractJobs } from "./localAiService";
 
-// --- CONFIGURATION ---
-const TIMEOUT_MS = 8000; 
+/**
+ * Gemini Service
+ * Uses Gemini 3 models for high-quality extraction and document generation.
+ * API Key is provided via process.env.API_KEY.
+ */
 
-// --- HELPER FUNCTIONS ---
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
 const soupify = (html: string): string => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
@@ -17,106 +20,63 @@ const soupify = (html: string): string => {
     return doc.body.textContent || "";
 };
 
+// Fix: Exported missing getSmartApplicationUrl utility function used by automationService.
+/**
+ * Processes a URL to ensure it is the most direct application link.
+ * Used by the automation service before launching browser windows.
+ */
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
-    if (!url) return `https://www.google.com/search?q=${encodeURIComponent(`${title} ${company} careers`)}`;
-    try {
-        if (url.includes('awstrack.me') || url.includes('click') || url.includes('redirect')) {
-            const protocolMatch = /https?:\/\//g;
-            const matches = [...url.matchAll(protocolMatch)];
-            if (matches.length > 1) {
-                const lastMatch = matches[matches.length - 1];
-                if (lastMatch.index !== undefined) return decodeURIComponent(url.substring(lastMatch.index));
-            }
-        }
-    } catch (e) { }
+    if (!url) return "";
+    // Future enhancement: Add logic to clean tracking parameters or resolve redirects.
     return url;
 };
 
-// --- API WRAPPER WITH FORCE FALLBACK ---
-
-async function safeGenerate(model: string, contents: any, config?: any): Promise<any> {
-    // @ts-ignore
-    const apiKey = process.env.API_KEY;
-    
-    // 1. If no key, throw immediately to trigger local fallback
-    if (!apiKey || apiKey.includes('YOUR_KEY')) {
-        throw new Error("NO_API_KEY");
-    }
-
-    // @ts-ignore
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const apiPromise = ai.models.generateContent({ model, contents, config });
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("TIMEOUT")), TIMEOUT_MS)
-    );
-
-    return Promise.race([apiPromise, timeoutPromise]);
-}
-
-// --- EXPORTED FUNCTIONS ---
-
 export const extractJobsFromEmailHtml = async (html: string, userKeywords: string[]): Promise<Partial<Job>[]> => {
-    // Try Gemini First (if key exists)
-    try {
-        const structuredText = soupify(html).substring(0, 15000);
-        const prompt = `
-        Extract job opportunities. Keywords: ${userKeywords.join(', ')}
-        Return JSON array: [{ title, company, location, description, applicationUrl }].
-        Text: ${structuredText}
-        `;
+    const structuredText = soupify(html).substring(0, 20000);
+    const prompt = `
+    You are an expert recruitment AI. Extract job opportunities from the following text. 
+    Target Keywords: ${userKeywords.join(', ')}
+    
+    Rules:
+    - Only extract real job opportunities.
+    - Ignore newsletters, advertisements, or "how-to" articles.
+    - Return a JSON array of objects.
+    
+    Text: ${structuredText}
+    `;
 
-        // @ts-ignore
-        const response: any = await safeGenerate('gemini-2.5-flash', prompt, {
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
             responseMimeType: 'application/json',
             responseSchema: {
                 type: Type.ARRAY,
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        title: { type: Type.STRING },
-                        company: { type: Type.STRING },
-                        location: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        applicationUrl: { type: Type.STRING }
-                    }
+                        title: { type: Type.STRING, description: 'The job title.' },
+                        company: { type: Type.STRING, description: 'The company name.' },
+                        location: { type: Type.STRING, description: 'The location (e.g., Remote, City, State).' },
+                        description: { type: Type.STRING, description: 'A brief 2-sentence summary of the role.' },
+                        applicationUrl: { type: Type.STRING, description: 'The direct link to apply.' },
+                        salaryRange: { type: Type.STRING, description: 'Salary if mentioned, otherwise leave empty.' }
+                    },
+                    required: ['title', 'company', 'applicationUrl']
                 }
             }
-        });
-
-        const result = JSON.parse(response.text || "[]");
-        if (result.length === 0) throw new Error("No jobs found by AI");
-        return result;
-
-    } catch (e) {
-        // --- ROBUST LOCAL FALLBACK (THE FREE TOOL) ---
-        console.log("Using Free Local Extraction Tool");
-        return localExtractJobs(html);
-    }
-};
-
-export const extractJobFromUrl = async (url: string): Promise<any> => {
-    try {
-        // Only try AI if we really think we have a key
-        // @ts-ignore
-        if (!process.env.API_KEY || process.env.API_KEY.includes('YOUR_KEY')) {
-            throw new Error("No Key");
         }
+    });
 
-        const prompt = `Extract job details from: ${url}. Return JSON: {title, company, location, description}.`;
-        // @ts-ignore
-        const response: any = await safeGenerate('gemini-2.5-flash', prompt, { tools: [{googleSearch: {}}] });
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    try {
+        const result = JSON.parse(response.text || "[]");
+        return result;
     } catch (e) {
-        return { title: 'Unknown Role', company: 'Unknown Company', description: 'Manual entry required.' };
+        console.error("Failed to parse Gemini response", e);
+        return [];
     }
 };
 
-/**
- * GENERATE COVER LETTER - ENFORCED FREE MODE
- * Directly calls the local logic to guarantee no API errors and zero cost.
- */
 export const generateCoverLetter = async (
     title: string, 
     company: string, 
@@ -125,22 +85,74 @@ export const generateCoverLetter = async (
     name: string, 
     email: string
 ): Promise<string> => {
-    // FORCE LOCAL FREE GENERATION
-    console.log("Using Free Local Writer for Cover Letter");
-    return localGenerateCoverLetter(title, company, description, resume, name, email);
+    const prompt = `
+    Write a high-impact, professional cover letter for the following position:
+    Role: ${title}
+    Company: ${company}
+    Job Description: ${description}
+    
+    Applicant Name: ${name}
+    Applicant Resume Context: ${resume}
+    
+    The letter should be persuasive, tailored to the specific job requirements, and professional in tone.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+            thinkingConfig: { thinkingBudget: 2000 }
+        }
+    });
+
+    return response.text || "";
 };
 
-/**
- * CUSTOMIZE RESUME - ENFORCED FREE MODE
- * Directly calls the local logic to guarantee no API errors and zero cost.
- */
 export const customizeResume = async (
     title: string, 
     company: string, 
     description: string, 
     resume: string
 ): Promise<string> => {
-    // FORCE LOCAL FREE GENERATION
-    console.log("Using Free Local Writer for Resume");
-    return localCustomizeResume(title, company, description, resume);
+    const prompt = `
+    Tailor the following resume for a specific job application.
+    Target Role: ${title} at ${company}
+    Job Description: ${description}
+    
+    Original Resume:
+    ${resume}
+    
+    Task:
+    - Update the professional summary to highlight relevant skills.
+    - Rephrase bullet points to align with the job's key requirements.
+    - Maintain the original structure but optimize for ATS keywords.
+    - Return the full updated resume text.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+            thinkingConfig: { thinkingBudget: 4000 }
+        }
+    });
+
+    return response.text || "";
+};
+
+export const extractJobFromUrl = async (url: string): Promise<any> => {
+    const prompt = `Extract full job details from this URL: ${url}. Return title, company, location, and a detailed description.`;
+    
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+            tools: [{ googleSearch: {} }]
+        }
+    });
+
+    const text = response.text || "";
+    // Simplified parsing of the LLM text for extraction
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Extracted Role', company: 'Check Site', description: text };
 };
