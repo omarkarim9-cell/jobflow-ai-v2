@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Send, Filter, Users, Star, BarChart3, TrendingUp } from 'lucide-react';
+import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { translations } from '../services/localization';
 
@@ -12,14 +12,11 @@ interface DashboardStatsProps {
 
 export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterChange, userProfile }) => {
   
-  // Localization
   const lang = userProfile?.preferences.language || 'en';
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
-  // Filter out DETECTED jobs for tracking analytics (only focus on what user is acting on)
   const trackedJobs = useMemo(() => jobs.filter(j => j.status !== JobStatus.DETECTED), [jobs]);
 
-  // Calculate Stats Dynamically
   const stats = useMemo(() => {
     return {
       active: trackedJobs.length,
@@ -29,7 +26,6 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
     };
   }, [trackedJobs]);
 
-  // Funnel Data
   const funnelData = [
       { name: 'Saved', value: trackedJobs.length, color: '#94a3b8' },
       { name: 'Applied', value: stats.applied, color: '#6366f1' },
@@ -37,7 +33,6 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       { name: 'Offer', value: stats.offers, color: '#10b981' },
   ];
 
-  // Calculate Chart Data (Last 7 Days) for Activity
   const chartData = useMemo(() => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -46,7 +41,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       const dateStr = d.toLocaleDateString('en-US', { weekday: 'short' }); 
       
       const count = trackedJobs.filter(job => {
-        const jobDate = new Date(job.detectedAt); // Using detectedAt as proxy for activity date
+        const jobDate = new Date(job.detectedAt);
         return jobDate.getDate() === d.getDate() && 
                jobDate.getMonth() === d.getMonth() && 
                jobDate.getFullYear() === d.getFullYear();
@@ -57,82 +52,90 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
     return days;
   }, [trackedJobs]);
 
-  const handleCardClick = (status: string) => {
-      if (onFilterChange) {
-          onFilterChange(status);
-      }
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* Top Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div 
-            className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-slate-300 transition-colors"
-        >
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tracked Jobs</p>
-            <h3 className="text-3xl font-bold text-slate-900 mt-1">{stats.active}</h3>
-            <p className="text-xs text-slate-400 mt-1">Total in your pipeline</p>
+      {/* System Health Header */}
+      <div className="flex items-center justify-between bg-indigo-900 text-white p-4 rounded-2xl shadow-xl shadow-indigo-900/20 overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+          <div className="flex items-center gap-4 relative z-10">
+              <div className="w-10 h-10 bg-indigo-500/30 rounded-xl flex items-center justify-center border border-white/10">
+                  <Activity className="w-5 h-5 text-indigo-300 animate-pulse" />
+              </div>
+              <div>
+                  <h2 className="text-sm font-bold tracking-tight">System Status: Active</h2>
+                  <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Enterprise Cloud Sync Enabled</p>
+              </div>
           </div>
-          <div className="p-3 bg-slate-100 text-slate-600 rounded-lg">
+          <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 relative z-10">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Secured via Clerk</span>
+          </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-slate-300 transition-all hover:shadow-md group">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tracked Jobs</p>
+            <h3 className="text-3xl font-black text-slate-900 mt-1">{stats.active}</h3>
+            <p className="text-[10px] text-slate-400 mt-1">Active Pipeline</p>
+          </div>
+          <div className="p-3 bg-slate-50 text-slate-400 rounded-xl group-hover:bg-slate-100 transition-colors">
             <Filter className="w-6 h-6" />
           </div>
         </div>
         
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-indigo-300 transition-colors">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-indigo-300 transition-all hover:shadow-md group">
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Applications Sent</p>
-            <h3 className="text-3xl font-bold text-indigo-600 mt-1">{stats.applied}</h3>
-            <p className="text-xs text-slate-400 mt-1">
-                {stats.active > 0 ? `${Math.round((stats.applied / stats.active) * 100)}% application rate` : '0% rate'}
+            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Applications</p>
+            <h3 className="text-3xl font-black text-indigo-600 mt-1">{stats.applied}</h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+                {stats.active > 0 ? `${Math.round((stats.applied / stats.active) * 100)}% Rate` : '0% Rate'}
             </p>
           </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+          <div className="p-3 bg-indigo-50 text-indigo-500 rounded-xl group-hover:bg-indigo-100 transition-colors">
             <Send className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-purple-300 transition-colors">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-purple-300 transition-all hover:shadow-md group">
            <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Interviews</p>
-            <h3 className="text-3xl font-bold text-purple-600 mt-1">{stats.interviews}</h3>
-            <p className="text-xs text-slate-400 mt-1">
-                {stats.applied > 0 ? `${Math.round((stats.interviews / stats.applied) * 100)}% conversion` : '0% conversion'}
+            <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Interviews</p>
+            <h3 className="text-3xl font-black text-purple-600 mt-1">{stats.interviews}</h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+                {stats.applied > 0 ? `${Math.round((stats.interviews / stats.applied) * 100)}% Conv` : '0% Conv'}
             </p>
           </div>
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-lg">
+          <div className="p-3 bg-purple-50 text-purple-500 rounded-xl group-hover:bg-purple-100 transition-colors">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-green-300 transition-colors">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-emerald-300 transition-all hover:shadow-md group">
            <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Offers</p>
-            <h3 className="text-3xl font-bold text-green-600 mt-1">{stats.offers}</h3>
-            <p className="text-xs text-slate-400 mt-1">Congrats!</p>
+            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Offers</p>
+            <h3 className="text-3xl font-black text-emerald-600 mt-1">{stats.offers}</h3>
+            <p className="text-[10px] text-slate-400 mt-1">Success Target</p>
           </div>
-          <div className="p-3 bg-green-50 text-green-600 rounded-lg">
+          <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:bg-emerald-100 transition-colors">
             <Star className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Conversion Funnel */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 flex items-center mb-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center mb-8">
                 <BarChart3 className="w-4 h-4 me-2 text-indigo-500" />
-                Application Funnel
+                Pipeline Funnel
             </h3>
             <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b', fontWeight: 600}} width={80}/>
-                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
+                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 800}} width={80}/>
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24}>
                             {funnelData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
@@ -142,18 +145,17 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
             </div>
           </div>
 
-          {/* Activity Chart */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 flex items-center mb-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center mb-8">
                 <TrendingUp className="w-4 h-4 me-2 text-indigo-500" />
-                Tracker Activity (7 Days)
+                Activity Trend
             </h3>
             <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                     <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                     </linearGradient>
                     </defs>
@@ -162,30 +164,30 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#94a3b8', fontSize: 12}}
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
                     dy={10}
                     />
                     <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#94a3b8', fontSize: 12}}
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
                     allowDecimals={false}
                     />
                     <Tooltip 
                     contentStyle={{
                         backgroundColor: '#fff', 
-                        borderRadius: '8px', 
+                        borderRadius: '12px', 
                         border: '1px solid #e2e8f0',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
                     }}
-                    itemStyle={{color: '#475569', fontSize: '12px', fontWeight: 600}}
+                    itemStyle={{color: '#475569', fontSize: '11px', fontWeight: 800}}
                     cursor={{stroke: '#cbd5e1', strokeWidth: 1}}
                     />
                     <Area 
                     type="monotone" 
                     dataKey="activity" 
                     stroke="#6366f1" 
-                    strokeWidth={3}
+                    strokeWidth={4}
                     fillOpacity={1} 
                     fill="url(#colorActivity)" 
                     />
