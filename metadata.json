@@ -1,5 +1,7 @@
 {
   "name": "JobFlow AI Pro v3.0",
-  "description": "Enterprise-grade stack upgrade: Clerk Authentication + Neon PostgreSQL Database. Hosted on Vercel.",
-  "requestFramePermissions": []
+  "description": "Enterprise-grade job search automation with Clerk and Neon DB.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
