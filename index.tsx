@@ -109,7 +109,7 @@ const ConfigurationGuard: React.FC = () => {
                             <ShieldCheck className="w-3 h-3 mr-2" /> Deployment Steps
                         </h4>
                         <div className="space-y-4 text-xs text-slate-300 leading-relaxed">
-                            <p>1. Open <strong>Vercel Dashboard > Settings > Environment Variables</strong>.</p>
+                            <p>1. Open <strong>Vercel Dashboard &gt; Settings &gt; Environment Variables</strong>.</p>
                             <p>2. Add the <strong>4 Keys</strong> listed above exactly as shown.</p>
                             <p>3. Go to the <strong>Deployments</strong> tab and select <strong>Redeploy</strong>.</p>
                         </div>
