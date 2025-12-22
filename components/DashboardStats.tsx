@@ -67,12 +67,12 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
               </div>
               <div>
                   <h2 className="text-sm font-bold tracking-tight">System Status: Active</h2>
-                  <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Enterprise Cloud Sync Enabled</p>
+                  <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Automation Services Online</p>
               </div>
           </div>
           <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 relative z-10">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Secured via Clerk</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">Encrypted Session</span>
           </div>
       </div>
 
@@ -153,7 +153,6 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
                 <TrendingUp className="w-4 h-4 me-2 text-indigo-500" />
                 Activity Trend
             </h3>
-            {/* Fix: Completed the truncated code and provided value for the style property */}
             <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>

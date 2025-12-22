@@ -6,7 +6,6 @@ import { Zap, RefreshCcw, AlertCircle, ExternalLink, Bug } from 'lucide-react';
 
 /**
  * Enhanced Environment Variable Detection
- * Prioritizes Vite-standard 'import.meta.env'
  */
 const getEnv = (key: string): string => {
     const viteKey = `VITE_${key}`;
@@ -15,7 +14,7 @@ const getEnv = (key: string): string => {
     const meta = import.meta.env;
     if (meta && meta[viteKey]) return String(meta[viteKey]);
     
-    // Fallback for non-Vite contexts or global injections
+    // Fallback for non-Vite contexts
     try {
         const globalEnv = (window as any).process?.env || {};
         return globalEnv[viteKey] || globalEnv[key] || "";
@@ -26,13 +25,6 @@ const getEnv = (key: string): string => {
 
 const CLERK_KEY = getEnv('CLERK_PUBLISHABLE_KEY');
 const GEMINI_KEY = getEnv('API_KEY');
-
-// Minimal safe logging for build verification
-// @ts-ignore - Vite environment detection fix
-if (import.meta.env?.DEV) {
-    console.log('[JobFlow] Clerk Configured:', !!CLERK_KEY);
-    console.log('[JobFlow] Gemini Configured:', !!GEMINI_KEY);
-}
 
 // Ensure process.env.API_KEY is available for the @google/genai SDK
 if (typeof window !== 'undefined') {
@@ -58,26 +50,26 @@ const ConfigurationGuard: React.FC = () => {
                         <Zap className="w-10 h-10" />
                     </div>
                     
-                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">System Link Required</h1>
+                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">Connection Required</h1>
                     <p className="text-slate-500 mb-8 text-center leading-relaxed text-sm">
-                        To run JobFlow, your environment variables must be "baked in" during the build process.
+                        To run the platform, your secure access keys must be configured in the environment.
                     </p>
                     
                     <div className="space-y-3 mb-8">
                         <div className={`p-4 rounded-2xl border flex items-center justify-between ${CLERK_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                            <span className="text-xs font-bold uppercase tracking-widest">VITE_CLERK_PUBLISHABLE_KEY</span>
-                            {CLERK_KEY ? <span className="text-[10px] font-black uppercase">Active</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
+                            <span className="text-xs font-bold uppercase tracking-widest">Identity Service</span>
+                            {CLERK_KEY ? <span className="text-[10px] font-black uppercase">Linked</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
                         </div>
                         <div className={`p-4 rounded-2xl border flex items-center justify-between ${GEMINI_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                            <span className="text-xs font-bold uppercase tracking-widest">VITE_API_KEY</span>
-                            {GEMINI_KEY ? <span className="text-[10px] font-black uppercase">Active</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
+                            <span className="text-xs font-bold uppercase tracking-widest">Intelligence Service</span>
+                            {GEMINI_KEY ? <span className="text-[10px] font-black uppercase">Linked</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
                         </div>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8 flex gap-4">
                         <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
                         <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                            <strong>Note:</strong> Vercel requires a <strong>Redeploy</strong> after you add new environment variables for them to take effect in the browser.
+                            <strong>Note:</strong> Services require a <strong>Redeploy</strong> after environment keys are updated for them to take effect.
                         </p>
                     </div>
 
@@ -87,7 +79,7 @@ const ConfigurationGuard: React.FC = () => {
                             className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                         >
                             <RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            Refresh After Redeploy
+                            Reload Platform
                         </button>
                         <a 
                             href="https://vercel.com/dashboard" 
@@ -96,12 +88,6 @@ const ConfigurationGuard: React.FC = () => {
                         >
                             <ExternalLink className="w-5 h-5" />
                         </a>
-                    </div>
-                    
-                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                           <Bug className="w-3 h-3" /> Check Browser Console for details
-                        </p>
                     </div>
                 </div>
             </div>

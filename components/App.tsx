@@ -30,12 +30,11 @@ import {
   Mail, 
   Settings as SettingsIcon, 
   PlusCircle,
-  Search,
+  Search as SearchIcon,
   Loader2,
   CheckSquare,
   Sparkles,
   ExternalLink,
-  Search as SearchIcon,
   List,
   CreditCard,
   BookOpen,
@@ -75,13 +74,13 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-        syncWithNeon();
+        syncWithDb();
     } else if (isLoaded) {
         setLoading(false);
     }
   }, [isLoaded, isSignedIn]);
 
-  const syncWithNeon = async () => {
+  const syncWithDb = async () => {
       setLoading(true);
       try {
           const token = await getToken();
@@ -109,7 +108,8 @@ export const App: React.FC = () => {
           setUserProfile(profile);
           
           const dbJobs = await fetchJobsFromDb(token).catch(() => []);
-          setJobs(dbJobs.filter(j => j.status !== JobStatus.DETECTED));
+          // We keep all jobs in state, but categorize them in views
+          setJobs(dbJobs);
           
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
@@ -198,6 +198,7 @@ export const App: React.FC = () => {
   }
 
   const trackedJobsCount = jobs.filter(j => j.status !== JobStatus.DETECTED).length;
+  const detectedJobsCount = jobs.filter(j => j.status === JobStatus.DETECTED).length;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -217,36 +218,73 @@ export const App: React.FC = () => {
         <div className="flex-1 px-4 py-2 overflow-y-auto custom-scrollbar">
           <button onClick={() => setCurrentView(ViewState.DASHBOARD)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.DASHBOARD ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <LayoutDashboard className="w-5 h-5 me-3" />
-            <span className="flex-1 text-start">Dashboard</span>
+            <span className="flex-1 text-start font-bold text-sm">Dashboard</span>
           </button>
+          
+          <button onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <SearchIcon className="w-5 h-5 me-3" />
+            <span className="flex-1 text-start font-bold text-sm">Scanned Jobs</span>
+            {detectedJobsCount > 0 && <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">{detectedJobsCount}</span>}
+          </button>
+
           <button onClick={() => setCurrentView(ViewState.TRACKER)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.TRACKER ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <List className="w-5 h-5 me-3" />
-            <span className="flex-1 text-start">Applications</span>
+            <span className="flex-1 text-start font-bold text-sm">Applications</span>
             {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
           </button>
+          
           <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <Mail className="w-5 h-5 me-3" />
-            <span className="flex-1 text-start">Inbox Scanner</span>
+            <span className="flex-1 text-start font-bold text-sm">Inbox Scanner</span>
           </button>
+          
           <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <SettingsIcon className="w-5 h-5 me-3" />
-            <span className="flex-1 text-start">Settings</span>
+            <span className="flex-1 text-start font-bold text-sm">Settings</span>
           </button>
         </div>
 
         <div className="p-4 border-t border-slate-200 mt-auto">
-             <div className="px-3 py-4 bg-slate-50 rounded-xl mb-4 text-xs text-slate-500 border border-slate-100">
-                <p className="font-bold text-slate-700 mb-1">Neon DB Status</p>
-                <div className="flex items-center gap-1.5 text-green-600">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                    Connected & Secure
-                </div>
-             </div>
+             <button onClick={() => {}} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors font-bold text-sm">
+                 <LogOut className="w-4 h-4 me-3" />
+                 Sign Out
+             </button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-hidden relative">
         {currentView === ViewState.DASHBOARD && <div className="h-full overflow-y-auto p-8"><DashboardStats jobs={jobs} userProfile={userProfile!} /></div>}
+        
+        {currentView === ViewState.SELECTED_JOBS && (
+            <div className="h-full overflow-y-auto p-8">
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-slate-900">Scanned Jobs</h1>
+                    <p className="text-sm text-slate-500">Newly detected roles from your email scan. Review and save them to your tracker.</p>
+                </div>
+                {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
+                            <JobCard 
+                                key={job.id} 
+                                job={job} 
+                                onClick={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }}
+                                isSelected={selectedJobId === job.id}
+                                isChecked={checkedJobIds.has(job.id)}
+                                onToggleCheck={handleToggleCheck}
+                                onAutoApply={(e) => {}}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="h-64 flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+                        <Mail className="w-12 h-12 mb-3 opacity-20" />
+                        <p className="font-medium">No scanned jobs to review.</p>
+                        <p className="text-xs">Run the Inbox Scanner to find new opportunities.</p>
+                    </div>
+                )}
+            </div>
+        )}
+
         {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
         {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => {}} /></div>}
         {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}

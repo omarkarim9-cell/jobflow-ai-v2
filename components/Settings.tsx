@@ -93,7 +93,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
       showNotification("Preferences saved successfully.", 'success');
   };
   
-  const handleRepairProfile = async () => {
+  const handleResetData = async () => {
     if(window.confirm("This will reset your job preferences. Continue?")) {
         const cleanProfile: UserProfile = {
             ...userProfile,
@@ -151,7 +151,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-slate-900 flex items-center uppercase tracking-widest">
                    <Cloud className={`w-4 h-4 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
-                   Neon Data Sync
+                   Data Sync Status
               </h3>
               <span className="bg-green-50 text-green-700 text-[10px] font-black px-2.5 py-1 rounded-full border border-green-100 flex items-center uppercase tracking-tighter">
                   <CheckCircle2 className="w-3 h-3 mr-1"/> Cloud Secure
@@ -159,7 +159,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           </div>
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
                <p className="text-xs text-slate-500 leading-relaxed">
-                   Your profile is securely synchronized with your private <strong>Neon PostgreSQL</strong> database. All changes are encrypted in transit and locked to your Clerk identity.
+                   Your profile is securely synchronized with your private database. All changes are encrypted in transit and locked to your identity.
                </p>
           </div>
       </div>
@@ -248,7 +248,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
                     className="absolute inset-0 opacity-0 cursor-pointer" 
                 />
                 <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2">
-                    <Upload className="w-3 h-3" /> Update .txt
+                    <Upload className="w-3 h-3" /> Upload Resume (.txt)
                 </button>
             </div>
         </div>
@@ -268,10 +268,10 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
            </h3>
            <div className="flex flex-wrap gap-3">
                <button 
-                    onClick={handleRepairProfile}
+                    onClick={handleResetData}
                     className="bg-white border border-red-200 text-red-600 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-all"
                >
-                   Repair Data
+                   Reset Data
                </button>
                <button 
                     onClick={onReset}
