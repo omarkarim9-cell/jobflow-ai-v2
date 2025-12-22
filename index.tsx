@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
-import { Zap, RefreshCcw, AlertCircle, ExternalLink, Bug } from 'lucide-react';
+import { Zap, RefreshCcw, AlertCircle, ExternalLink } from 'lucide-react';
 
 /**
  * Enhanced Environment Variable Detection
@@ -69,7 +69,7 @@ const ConfigurationGuard: React.FC = () => {
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8 flex gap-4">
                         <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
                         <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                            <strong>Note:</strong> Services require a <strong>Redeploy</strong> after environment keys are updated for them to take effect.
+                            <strong>Note:</strong> Configuration changes require a <strong>Platform Refresh</strong> to take effect in your session.
                         </p>
                     </div>
 
@@ -79,7 +79,7 @@ const ConfigurationGuard: React.FC = () => {
                             className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                         >
                             <RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            Reload Platform
+                            Refresh Platform
                         </button>
                         <a 
                             href="https://vercel.com/dashboard" 

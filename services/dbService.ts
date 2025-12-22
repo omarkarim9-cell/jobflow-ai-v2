@@ -5,8 +5,28 @@ import { Job, UserProfile } from '../types';
  * This service uses the Clerk identity token to authenticate requests to the backend.
  */
 
-// Use an absolute path for the API base to ensure it works across different route levels
 const API_BASE = '/api';
+
+/**
+ * Normalizes user profile data from database response to frontend interface.
+ */
+const normalizeProfile = (data: any): UserProfile | null => {
+    if (!data) return null;
+    return {
+        id: data.id,
+        fullName: data.fullName || data.full_name,
+        email: data.email,
+        password: '',
+        phone: data.phone || '',
+        resumeContent: data.resumeContent || data.resume_content || '',
+        resumeFileName: data.resumeFileName || data.resume_file_name || '',
+        preferences: data.preferences || { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' },
+        onboardedAt: data.onboardedAt || data.created_at || data.onboarded_at || new Date().toISOString(),
+        connectedAccounts: data.connectedAccounts || data.connected_accounts || [],
+        plan: data.plan || 'free',
+        subscriptionExpiry: data.subscriptionExpiry || data.subscription_expiry
+    };
+};
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
     const response = await fetch(`${API_BASE}/profile`, {
@@ -19,9 +39,10 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
     });
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to save profile to Neon');
+        throw new Error(errorData.message || 'Failed to save profile to cloud storage');
     }
-    return response.json();
+    const data = await response.json();
+    return normalizeProfile(data);
 };
 
 export const getUserProfile = async (clerkToken: string): Promise<UserProfile | null> => {
@@ -31,8 +52,9 @@ export const getUserProfile = async (clerkToken: string): Promise<UserProfile | 
         }
     });
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Failed to fetch profile from Neon');
-    return response.json();
+    if (!response.ok) throw new Error('Failed to fetch profile from cloud storage');
+    const data = await response.json();
+    return normalizeProfile(data);
 };
 
 export const fetchJobsFromDb = async (clerkToken: string): Promise<Job[]> => {
@@ -56,7 +78,7 @@ export const saveJobToDb = async (job: Job, clerkToken: string) => {
         body: JSON.stringify(job)
     });
     if (!response.ok) {
-        console.error('Failed to save job to Neon');
+        console.error('Failed to save job to cloud');
     }
 };
 
@@ -68,7 +90,7 @@ export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
         }
     });
     if (!response.ok) {
-        console.error('Failed to delete job from Neon');
+        console.error('Failed to delete job from cloud');
     }
 };
 

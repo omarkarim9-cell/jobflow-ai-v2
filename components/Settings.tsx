@@ -86,11 +86,11 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
       setIsDirty(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-      showNotification("Preferences saved successfully.", 'success');
+      showNotification("Profile and preferences saved.", 'success');
   };
   
   const handleResetData = async () => {
-    if(window.confirm("This will reset your job preferences. All saved roles will remain. Continue?")) {
+    if(window.confirm("This will reset your job preferences. Saved applications will not be affected. Continue?")) {
         const cleanProfile: UserProfile = {
             ...userProfile,
             preferences: {
@@ -104,7 +104,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
         setRolesInput("");
         setLocationsInput("");
         onUpdate(cleanProfile);
-        showNotification("Profile settings reset.", 'success');
+        showNotification("Search parameters reset.", 'success');
     }
   };
 
@@ -121,12 +121,13 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                   resumeContent: text,
                   resumeFileName: file.name
               };
+              // Push update immediately for file uploads
               onUpdate(updatedProfile);
-              showNotification("Resume updated successfully", 'success');
+              showNotification("Master resume uploaded successfully.", 'success');
           };
           reader.readAsText(file);
       } else {
-          showNotification("Please upload a .txt file", 'error');
+          showNotification("Please upload a .txt file.", 'error');
       }
       e.target.value = '';
   };
@@ -136,24 +137,24 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
       <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
         <h2 className="text-3xl font-black text-slate-900 flex items-center">
             <User className={`w-8 h-8 text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`} />
-            {t('settings_title')}
+            Account Configuration
         </h2>
-        <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">{t('settings_desc')}</p>
+        <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Global preferences and identity management</p>
       </div>
 
       <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-black text-slate-900 flex items-center uppercase tracking-widest">
                    <Cloud className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-3' : 'mr-3'}`} />
-                   Synchronization
+                   Data Synchronization
               </h3>
               <span className="bg-green-50 text-green-700 text-[10px] font-black px-3 py-1.5 rounded-full border border-green-100 flex items-center uppercase tracking-tighter">
-                  <CheckCircle2 className="w-3 h-3 mr-1.5"/> Cloud Secure
+                  <CheckCircle2 className="w-3 h-3 mr-1.5"/> Cloud Secured
               </span>
           </div>
           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                   Your profile and application history are encrypted and synchronized across your devices.
+                   Your profile, preferences, and resume are encrypted and synchronized across your sessions.
                </p>
           </div>
       </div>
@@ -165,7 +166,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
              </div>
              <div>
                  <h3 className="text-xl font-black text-slate-900 tracking-tight">{t('pref_title')}</h3>
-                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Search Parameters</p>
+                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Search Criteria</p>
              </div>
         </div>
         
@@ -177,7 +178,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-slate-700"
                   value={rolesInput}
                   onChange={(e) => handleRolesChange(e.target.value)}
-                  placeholder="e.g. Frontend Engineer, Product Designer"
+                  placeholder="e.g. Software Engineer, Tech Lead"
                />
            </div>
            
@@ -188,7 +189,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-slate-700"
                   value={locationsInput}
                   onChange={(e) => handleLocationsChange(e.target.value)}
-                  placeholder="e.g. Remote, Europe, USA"
+                  placeholder="e.g. Remote, San Francisco"
                />
            </div>
         </div>
@@ -201,7 +202,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
              </div>
              <div>
                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t('lang_label')}</h3>
-                 <p className="text-xs text-slate-500 font-bold mt-1">Interface localization</p>
+                 <p className="text-xs text-slate-500 font-bold mt-1">Platform language</p>
              </div>
           </div>
           <div className="bg-slate-50 rounded-2xl px-6 py-3 border border-slate-200">
@@ -227,7 +228,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                 </div>
                 <div>
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">Master Resume</h3>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">AI Training Data</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">AI Adaptation Source</p>
                 </div>
             </div>
             <div className="relative overflow-hidden group">
@@ -247,7 +248,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
             className="w-full h-80 p-6 bg-slate-50 border border-slate-200 rounded-3xl font-mono text-[11px] text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
             value={formData.resumeContent}
             onChange={(e) => handleChange('resumeContent', e.target.value)}
-            placeholder="Paste your professional experience here for AI customization..."
+            placeholder="Paste your professional history for AI personalization..."
         />
       </div>
 
@@ -284,7 +285,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
       {showSuccess && (
           <div className={`fixed bottom-8 ${isRtl ? 'left-8' : 'right-8'} z-40 bg-green-600 text-white px-10 py-5 rounded-full font-black text-sm shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-8 duration-500`}>
               <CheckCircle2 className="w-5 h-5" />
-              Configuration Saved
+              Profile Updated
           </div>
       )}
     </div>
