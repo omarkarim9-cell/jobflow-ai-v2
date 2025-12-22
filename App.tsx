@@ -52,11 +52,13 @@ export const App: React.FC = () => {
       setNotification({ message, type });
   };
 
+  /**
+   * Only show onboarding if signed in and the profile is genuinely missing data.
+   */
   const needsOnboarding = useMemo(() => {
-    if (!userProfile) return false;
-    // Onboarding is needed if the profile is essentially empty
+    if (!isSignedIn || !userProfile) return false;
     return !userProfile.resumeContent || userProfile.resumeContent.trim().length < 10;
-  }, [userProfile]);
+  }, [isSignedIn, userProfile]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -75,19 +77,11 @@ export const App: React.FC = () => {
               return;
           }
 
-          // Fetch the profile from the database
-          const dbProfile = await getUserProfile(token).catch((err) => {
-              console.error("Profile Fetch Error:", err);
-              return null;
-          });
-
-          if (dbProfile && dbProfile.id) {
-              // We have a valid profile, use it.
-              setUserProfile(dbProfile);
-          } else if (user) {
-              // No profile found, initialize a local default but do not save to DB 
-              // yet to avoid overwriting with defaults if fetch just blipped.
-              const newProfile: UserProfile = {
+          let profile = await getUserProfile(token).catch(() => null);
+          
+          if (!profile && user) {
+              // Create local default but don't force save until they finish onboarding
+              profile = {
                   id: user.id,
                   fullName: user.fullName || 'User',
                   email: user.primaryEmailAddress?.emailAddress || '',
@@ -105,8 +99,9 @@ export const App: React.FC = () => {
                   plan: 'free',
                   onboardedAt: new Date().toISOString()
               };
-              setUserProfile(newProfile);
           }
+          
+          setUserProfile(profile);
           
           const dbJobs = await fetchJobsFromDb(token).catch(() => []);
           setJobs(dbJobs);
@@ -128,11 +123,11 @@ export const App: React.FC = () => {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile changes saved to cloud.", "success");
+            showNotification("Profile synced with cloud.", "success");
         }
     } catch (error) {
         console.error("Profile Save Error:", error);
-        showNotification("Cloud save failed. Changes stored locally.", "error");
+        showNotification("Failed to save to cloud. Changes kept locally.", "error");
     }
   };
   
@@ -170,7 +165,7 @@ export const App: React.FC = () => {
       setJobs(prev => prev.filter(j => j.id !== id));
       const token = await getToken();
       if (token) await deleteJobFromDb(id, token);
-      showNotification("Job removed from database.", 'success');
+      showNotification("Job record removed.", 'success');
   };
 
   const handleToggleCheck = (id: string) => {

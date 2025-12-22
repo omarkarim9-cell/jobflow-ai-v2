@@ -14,8 +14,8 @@ const normalizeProfile = (data: any): UserProfile | null => {
     if (!data) return null;
     return {
         id: data.id,
-        fullName: data.fullName || data.full_name,
-        email: data.email,
+        fullName: data.fullName || data.full_name || '',
+        email: data.email || '',
         password: '',
         phone: data.phone || '',
         resumeContent: data.resumeContent || data.resume_content || '',
