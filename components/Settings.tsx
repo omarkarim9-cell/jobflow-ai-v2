@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Job } from '../types';
-import { Save, User, Briefcase, FileText, HardDrive, Download, File, Globe, Languages, Upload, AlertTriangle, RotateCcw, Database, XCircle, CheckCircle2, FileJson, Cloud } from 'lucide-react';
+import { Save, User, Briefcase, FileText, Globe, Languages, Upload, AlertTriangle, RotateCcw, Database, CheckCircle2, Cloud } from 'lucide-react';
 import { writeFileToDirectory } from '../services/fileSystemService';
 import { NotificationType } from './NotificationToast';
 import { translations, LanguageCode } from '../services/localization';
@@ -16,24 +16,38 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHandle, onDirHandleChange, jobs, showNotification, onReset }) => {
-  const [formData, setFormData] = useState(userProfile);
+  // Ensure we have a valid object even if the DB returned null/empty for sub-fields
+  const [formData, setFormData] = useState<UserProfile>({
+      ...userProfile,
+      preferences: userProfile?.preferences || { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' }
+  });
   
-  // Local state for raw text inputs
-  const [rolesInput, setRolesInput] = useState(userProfile.preferences.targetRoles.join(', '));
-  const [locationsInput, setLocationsInput] = useState(userProfile.preferences.targetLocations.join(', '));
+  // Defensive local state
+  const [rolesInput, setRolesInput] = useState((userProfile?.preferences?.targetRoles || []).join(', '));
+  const [locationsInput, setLocationsInput] = useState((userProfile?.preferences?.targetLocations || []).join(', '));
 
   const [isDirty, setIsDirty] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // Localization Helper
-  const lang = (userProfile.preferences.language as LanguageCode) || 'en';
-  const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
+  // Localization Helper with fallback
+  const langRaw = formData?.preferences?.language || 'en';
+  const lang = (translations.hasOwnProperty(langRaw) ? langRaw : 'en') as LanguageCode;
+  const t = (key: keyof typeof translations['en']) => {
+      const pack = translations[lang] || translations['en'];
+      // @ts-ignore
+      return pack[key] || translations['en'][key] || key;
+  };
   const isRtl = lang === 'ar';
 
   useEffect(() => {
-      setFormData(userProfile);
-      setRolesInput(userProfile.preferences.targetRoles.join(', '));
-      setLocationsInput(userProfile.preferences.targetLocations.join(', '));
+      if (userProfile) {
+          setFormData({
+              ...userProfile,
+              preferences: userProfile.preferences || { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' }
+          });
+          setRolesInput((userProfile.preferences?.targetRoles || []).join(', '));
+          setLocationsInput((userProfile.preferences?.targetLocations || []).join(', '));
+      }
   }, [userProfile]);
 
   const handleChange = (field: string, value: any) => {
@@ -84,9 +98,11 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
         const cleanProfile: UserProfile = {
             ...userProfile,
             preferences: {
-                ...userProfile.preferences,
                 targetRoles: [],
-                targetLocations: []
+                targetLocations: [],
+                minSalary: '',
+                remoteOnly: false,
+                language: 'en'
             }
         };
         setRolesInput("");
@@ -94,17 +110,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
         onUpdate(cleanProfile);
         showNotification("Profile data reset.", 'success');
     }
-  };
-
-  const handleSyncToDisk = async () => {
-      if (!dirHandle) return;
-      try {
-          const data = JSON.stringify(jobs, null, 2);
-          await writeFileToDirectory(dirHandle, 'jobs_export.json', data);
-          showNotification("Exported 'jobs_export.json' to workspace.", 'success');
-      } catch (e) {
-          showNotification("Failed to write to disk.", 'error');
-      }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,61 +136,88 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="max-w-4xl mx-auto space-y-6 pb-24" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900 flex items-center">
-            <User className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <h2 className="text-2xl font-black text-slate-900 flex items-center">
+            <User className={`w-6 h-6 text-indigo-600 ${isRtl ? 'ml-3' : 'mr-3'}`} />
             {t('settings_title')}
         </h2>
         <p className="text-sm text-slate-500 mt-1">{t('settings_desc')}</p>
       </div>
 
-      {/* Database Connection Status */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      {/* Cloud Status */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 flex items-center">
-                   <Cloud className={`w-5 h-5 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
-                   Neon Cloud Sync
+              <h3 className="text-sm font-black text-slate-900 flex items-center uppercase tracking-widest">
+                   <Cloud className={`w-4 h-4 text-indigo-600 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+                   Neon Data Sync
               </h3>
-              <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded border border-green-200 flex items-center">
-                  <CheckCircle2 className="w-3 h-3 mr-1"/> Verified via Clerk
+              <span className="bg-green-50 text-green-700 text-[10px] font-black px-2.5 py-1 rounded-full border border-green-100 flex items-center uppercase tracking-tighter">
+                  <CheckCircle2 className="w-3 h-3 mr-1"/> Cloud Secure
               </span>
           </div>
-          
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-               <p className="text-sm text-slate-600">
-                   Your profile and job data are automatically synchronized with your <strong>Neon PostgreSQL</strong> database using your secure Clerk session.
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+               <p className="text-xs text-slate-500 leading-relaxed">
+                   Your profile is securely synchronized with your private <strong>Neon PostgreSQL</strong> database. All changes are encrypted in transit and locked to your Clerk identity.
                </p>
-               <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                   <Database className="w-3 h-3" />
-                   <span>Endpoint: /api/profile</span>
-               </div>
           </div>
       </div>
 
-      {/* Language Selector */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div className="flex items-center">
-             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
-                 <Languages className="w-6 h-6" />
+      {/* Preferences Section */}
+      <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex items-center mb-8">
+             <div className={`p-3 bg-indigo-50 rounded-2xl text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                 <Briefcase className="w-6 h-6" />
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-slate-900">{t('lang_label')}</h3>
-                 <p className="text-xs text-slate-500">
-                     {userProfile.preferences.language === 'en' ? 'English' : 
-                      userProfile.preferences.language === 'es' ? 'Español' : 
-                      userProfile.preferences.language === 'fr' ? 'Français' : 
-                      userProfile.preferences.language === 'de' ? 'Deutsch' : 'العربية'}
-                 </p>
+                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{t('pref_title')}</h3>
+                 <p className="text-xs text-slate-500">Configure your global search criteria.</p>
+             </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{t('target_roles')}</label>
+               <input 
+                  type="text" 
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
+                  value={rolesInput}
+                  onChange={(e) => handleRolesChange(e.target.value)}
+                  placeholder="e.g. Frontend Engineer, React Developer"
+               />
+               <p className="text-[10px] text-slate-400">Comma separated</p>
+           </div>
+           
+           <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{t('target_loc')}</label>
+               <input 
+                  type="text" 
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
+                  value={locationsInput}
+                  onChange={(e) => handleLocationsChange(e.target.value)}
+                  placeholder="e.g. Remote, New York"
+               />
+           </div>
+        </div>
+      </div>
+
+      {/* Language Section */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div className="flex items-center">
+             <div className={`p-3 bg-indigo-50 rounded-2xl text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                 <Languages className="w-5 h-5" />
+             </div>
+             <div>
+                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t('lang_label')}</h3>
+                 <p className="text-xs text-slate-500">Update app UI language.</p>
              </div>
           </div>
-          <div className="flex items-center bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
-              <Globe className="w-4 h-4 text-slate-500 mx-1" />
+          <div className="bg-slate-100 rounded-2xl px-4 py-2 border border-slate-200">
               <select 
-                  value={userProfile.preferences.language}
+                  value={lang}
                   onChange={(e) => handlePrefChange('language', e.target.value)}
-                  className="bg-transparent text-sm font-medium text-slate-700 outline-none py-1 cursor-pointer"
+                  className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
               >
                   <option value="en">English</option>
                   <option value="es">Español</option>
@@ -196,120 +228,74 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, dirHa
           </div>
       </div>
 
-      {/* Preferences Form */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center mb-6">
-             <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
-                 <Briefcase className="w-6 h-6" />
-             </div>
-             <div>
-                 <h3 className="text-lg font-bold text-slate-900">{t('pref_title')}</h3>
-                 <p className="text-sm text-slate-500">Customize what jobs the AI looks for.</p>
-             </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <div>
-               <label className="block text-sm font-bold text-slate-700 mb-2">{t('target_roles')}</label>
-               <input 
-                  type="text" 
-                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={rolesInput}
-                  onChange={(e) => handleRolesChange(e.target.value)}
-                  placeholder="e.g. Frontend Developer, React Engineer"
-               />
-               <p className="text-xs text-slate-400 mt-1">Separate roles with commas.</p>
-           </div>
-           
-           <div>
-               <label className="block text-sm font-bold text-slate-700 mb-2">{t('target_loc')}</label>
-               <input 
-                  type="text" 
-                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={locationsInput}
-                  onChange={(e) => handleLocationsChange(e.target.value)}
-                  placeholder="e.g. Remote, New York"
-               />
-           </div>
-        </div>
-      </div>
-
-      {/* Resume Upload */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-start mb-6">
+      {/* Resume Section */}
+      <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-start mb-8">
             <div className="flex items-center">
-                <div className={`p-2 bg-indigo-50 rounded-lg text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
+                <div className={`p-3 bg-indigo-50 rounded-2xl text-indigo-600 ${isRtl ? 'ml-4' : 'mr-4'}`}>
                     <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                    <h3 className="text-lg font-bold text-slate-900">Master Resume</h3>
-                    <p className="text-sm text-slate-500">The base content used for AI customization.</p>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Master Resume</h3>
+                    <p className="text-xs text-slate-500">Primary data for AI customization.</p>
                 </div>
             </div>
-        </div>
-
-        <div className="space-y-4">
-             <div className="relative group">
+            <div className="relative overflow-hidden">
                 <input 
                     type="file" 
                     accept=".txt"
                     onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                    className="absolute inset-0 opacity-0 cursor-pointer" 
                 />
-                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 group-hover:border-indigo-500 group-hover:bg-indigo-50 transition-all flex flex-col items-center justify-center">
-                    <Upload className="w-8 h-8 text-indigo-400 mb-2 group-hover:scale-110 transition-transform"/>
-                    <span className="text-sm font-medium text-slate-600">
-                        {formData.resumeFileName ? `Replace ${formData.resumeFileName}` : "Upload .txt file"}
-                    </span>
-                </div>
+                <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <Upload className="w-3 h-3" /> Update .txt
+                </button>
             </div>
-
-            <textarea 
-                className="w-full h-48 p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
-                value={formData.resumeContent}
-                onChange={(e) => handleChange('resumeContent', e.target.value)}
-                placeholder="Paste your resume text here..."
-            />
         </div>
+
+        <textarea 
+            className="w-full h-64 p-5 bg-slate-50 border border-slate-200 rounded-3xl font-mono text-[11px] text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none resize-none leading-relaxed"
+            value={formData.resumeContent}
+            onChange={(e) => handleChange('resumeContent', e.target.value)}
+            placeholder="Paste your resume content here..."
+        />
       </div>
 
       {/* Danger Zone */}
-      <div className="mt-8 border-t border-red-100 pt-8">
-          <div className="bg-red-50 p-6 rounded-xl border border-red-100">
-               <h3 className="text-red-800 font-bold mb-2 flex items-center">
-                   <AlertTriangle className="w-5 h-5 mr-2" /> Danger Zone
-               </h3>
-               <div className="flex space-x-4">
-                   <button 
-                        onClick={handleRepairProfile}
-                        className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-50 flex items-center"
-                   >
-                       <RotateCcw className="w-4 h-4 mr-2" /> Repair Profile
-                   </button>
-                   <button 
-                        onClick={onReset}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 flex items-center shadow-sm"
-                   >
-                       <RotateCcw className="w-4 h-4 mr-2" /> Sign Out
-                   </button>
-               </div>
-          </div>
+      <div className="bg-red-50 p-8 rounded-3xl border border-red-100">
+           <h3 className="text-red-900 font-black mb-4 flex items-center uppercase tracking-widest text-xs">
+               <AlertTriangle className="w-4 h-4 mr-2" /> Danger Zone
+           </h3>
+           <div className="flex flex-wrap gap-3">
+               <button 
+                    onClick={handleRepairProfile}
+                    className="bg-white border border-red-200 text-red-600 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-all"
+               >
+                   Repair Data
+               </button>
+               <button 
+                    onClick={onReset}
+                    className="bg-red-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-700 transition-all shadow-sm"
+               >
+                   Sign Out
+               </button>
+           </div>
       </div>
 
-      {/* Sticky Save Button */}
-      <div className={`fixed bottom-6 ${isRtl ? 'left-6' : 'right-6'} z-30 transition-transform duration-300 ${isDirty ? 'translate-y-0' : 'translate-y-24'}`}>
+      {/* Floating Save Button */}
+      <div className={`fixed bottom-8 ${isRtl ? 'left-8' : 'right-8'} z-40 transition-all duration-500 transform ${isDirty ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-24 opacity-0 scale-90'}`}>
           <button 
               onClick={handleSave}
-              className="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all flex items-center"
+              className="bg-slate-900 text-white px-8 py-4 rounded-full font-black text-sm shadow-2xl hover:bg-black transition-all flex items-center gap-3 border border-white/10"
           >
-              <Save className={`w-5 h-5 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+              <Save className="w-5 h-5" />
               Save Changes
           </button>
       </div>
 
       {showSuccess && (
-          <div className={`fixed bottom-6 ${isRtl ? 'left-6' : 'right-6'} z-30 bg-green-600 text-white px-6 py-3 rounded-full font-bold shadow-xl flex items-center animate-in slide-in-from-bottom-10 fade-in`}>
-              <CheckCircle2 className={`w-5 h-5 ${isRtl ? 'ml-2' : 'mr-2'}`} />
+          <div className={`fixed bottom-8 ${isRtl ? 'left-8' : 'right-8'} z-40 bg-green-600 text-white px-8 py-4 rounded-full font-black text-sm shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-8 duration-500`}>
+              <CheckCircle2 className="w-5 h-5" />
               Saved Successfully
           </div>
       )}
