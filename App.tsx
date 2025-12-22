@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from './types';
 import { DashboardStats } from './components/DashboardStats';
 import { JobCard } from './components/JobCard';
-import { JobDetail } from './components/JobDetail';
 import { InboxScanner } from './components/InboxScanner';
 import { Onboarding } from './components/Onboarding';
 import { Settings } from './components/Settings';
@@ -15,7 +14,7 @@ import { Auth } from './components/Auth';
 import { ApplicationTracker } from './components/ApplicationTracker';
 import { NotificationToast, NotificationType } from './components/NotificationToast';
 import { createVirtualDirectory } from './services/fileSystemService';
-import { translations, LanguageCode } from './services/localization';
+import { LanguageCode } from './services/localization';
 import { 
   fetchJobsFromDb, 
   getUserProfile, 
@@ -55,28 +54,11 @@ export const App: React.FC = () => {
   const lang = (userProfile?.preferences?.language as LanguageCode) || 'en';
   const isRtl = lang === 'ar';
 
-  const showNotification = (message: string, type: NotificationType) => {
+  const showNotification = useCallback((message: string, type: NotificationType) => {
       setNotification({ message, type });
-  };
+  }, []);
 
-  /**
-   * Only show onboarding if signed in and the profile is genuinely missing data.
-   */
-  const needsOnboarding = useMemo(() => {
-    if (!isSignedIn || !userProfile) return false;
-    // We check if resumeContent is missing, which is the primary indicator of an incomplete profile.
-    return !userProfile.resumeContent || userProfile.resumeContent.trim().length < 10;
-  }, [isSignedIn, userProfile]);
-
-  useEffect(() => {
-    if (isLoaded && isSignedIn) {
-        syncData();
-    } else if (isLoaded) {
-        setLoading(false);
-    }
-  }, [isLoaded, isSignedIn]);
-
-  const syncData = async () => {
+  const syncData = useCallback(async () => {
       setLoading(true);
       try {
           const token = await getToken();
@@ -88,7 +70,6 @@ export const App: React.FC = () => {
           let profile = await getUserProfile(token).catch(() => null);
           
           if (!profile && user) {
-              // Initial default profile for new users
               profile = {
                   id: user.id,
                   fullName: user.fullName || 'User',
@@ -97,13 +78,7 @@ export const App: React.FC = () => {
                   phone: '',
                   resumeContent: '',
                   connectedAccounts: [],
-                  preferences: { 
-                      targetRoles: [], 
-                      targetLocations: [], 
-                      minSalary: '', 
-                      remoteOnly: false, 
-                      language: 'en' 
-                  },
+                  preferences: { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' },
                   plan: 'free',
                   onboardedAt: new Date().toISOString()
               };
@@ -116,27 +91,37 @@ export const App: React.FC = () => {
           
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
+          
+          // If profile is empty, start them on Dashboard but they'll see the onboarding if empty
+          if (!profile?.resumeContent) {
+            setCurrentView(ViewState.DASHBOARD);
+          }
       } catch (e) {
-          console.error("Synchronization Failure:", e);
-          showNotification("Could not synchronize data with cloud.", "error");
+          console.error("Sync error:", e);
+          showNotification("Failed to synchronize cloud data.", "error");
       } finally {
           setLoading(false);
       }
-  };
+  }, [getToken, user, showNotification]);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+        syncData();
+    } else if (isLoaded) {
+        setLoading(false);
+    }
+  }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
-    // Update local state first to immediately dismiss onboarding if necessary
     setUserProfile(updatedProfile);
-    
     try {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced with cloud.", "success");
+            showNotification("Data synced with cloud.", "success");
         }
     } catch (error) {
-        console.error("Profile Save Error:", error);
-        showNotification("Failed to save to cloud. Changes kept locally.", "error");
+        showNotification("Cloud sync failed. Data kept locally.", "error");
     }
   };
   
@@ -159,7 +144,7 @@ export const App: React.FC = () => {
     getToken().then(token => {
         if (token) newJobs.forEach(job => saveJobToDb(job, token));
     });
-    showNotification(`Added ${newJobs.length} new roles.`, 'success');
+    showNotification(`Added ${newJobs.length} jobs.`, 'success');
   };
 
   const handleAddManualJob = async (job: Job) => {
@@ -174,7 +159,7 @@ export const App: React.FC = () => {
       setJobs(prev => prev.filter(j => j.id !== id));
       const token = await getToken();
       if (token) await deleteJobFromDb(id, token);
-      showNotification("Job record removed.", 'success');
+      showNotification("Job removed.", 'success');
   };
 
   const handleToggleCheck = (id: string) => {
@@ -184,7 +169,7 @@ export const App: React.FC = () => {
     setCheckedJobIds(newChecked);
   };
 
-  // --- RENDERING LOGIC ---
+  // --- RENDERING ---
 
   if (!isLoaded || loading) {
     return (
@@ -194,35 +179,21 @@ export const App: React.FC = () => {
     );
   }
 
-  // FIRST: Force sign in
+  // FORCE AUTH FIRST
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
 
-  // SECOND: Force onboarding if signed in but profile is empty
-  if (needsOnboarding) {
-    return (
-      <Onboarding 
-        onComplete={handleUpdateProfile} 
-        onDirHandleChange={setDirHandle} 
-        dirHandle={dirHandle} 
-        showNotification={showNotification} 
-      />
-    );
-  }
-
-  // THIRD: Main Application Shell
+  const isProfileEmpty = !userProfile?.resumeContent || userProfile.resumeContent.trim().length < 10;
+  
+  // Dashboard is the default, but if profile is empty and they are on dashboard, show onboarding within the shell
   const trackedJobsCount = jobs.filter(j => j.status !== JobStatus.DETECTED).length;
   const detectedJobsCount = jobs.filter(j => j.status === JobStatus.DETECTED).length;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
       {notification && (
-        <NotificationToast 
-          message={notification.message} 
-          type={notification.type} 
-          onClose={() => setNotification(null)} 
-        />
+        <NotificationToast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />
       )}
 
       <aside className="w-64 bg-white border-e border-slate-200 flex flex-col shrink-0 z-20">
@@ -251,11 +222,7 @@ export const App: React.FC = () => {
           >
             <SearchIcon className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Scanned Jobs</span>
-            {detectedJobsCount > 0 && (
-              <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                {detectedJobsCount}
-              </span>
-            )}
+            {detectedJobsCount > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">{detectedJobsCount}</span>}
           </button>
 
           <button 
@@ -264,11 +231,7 @@ export const App: React.FC = () => {
           >
             <List className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Applications</span>
-            {trackedJobsCount > 0 && (
-              <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                {trackedJobsCount}
-              </span>
-            )}
+            {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
           </button>
           
           <button 
@@ -281,26 +244,17 @@ export const App: React.FC = () => {
 
           <div className="my-2 border-t border-slate-100" />
 
-          <button 
-            onClick={() => setCurrentView(ViewState.SUBSCRIPTION)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUBSCRIPTION ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SUBSCRIPTION)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUBSCRIPTION ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <CreditCard className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Subscription</span>
           </button>
 
-          <button 
-            onClick={() => setCurrentView(ViewState.SUPPORT)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUPPORT ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SUPPORT)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUPPORT ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <LifeBuoy className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Support</span>
           </button>
 
-          <button 
-            onClick={() => setCurrentView(ViewState.MANUAL)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.MANUAL ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.MANUAL)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.MANUAL ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <BookOpen className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Help Guide</span>
           </button>
@@ -315,10 +269,7 @@ export const App: React.FC = () => {
         </div>
 
         <div className="p-4 border-t border-slate-200 mt-auto">
-             <button 
-              onClick={() => signOut()} 
-              className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors font-bold text-sm"
-             >
+             <button onClick={() => signOut()} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors font-bold text-sm">
                  <LogOut className="w-4 h-4 me-3" />
                  Sign Out
              </button>
@@ -326,102 +277,43 @@ export const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 overflow-hidden relative">
+        {/* If user hasn't filled profile, they stay in Dashboard where Onboarding is shown as a component */}
         {currentView === ViewState.DASHBOARD && (
           <div className="h-full overflow-y-auto p-8">
-            <DashboardStats jobs={jobs} userProfile={userProfile!} />
+            {isProfileEmpty ? (
+              <Onboarding onComplete={handleUpdateProfile} onDirHandleChange={setDirHandle} dirHandle={dirHandle} showNotification={showNotification} />
+            ) : (
+              <DashboardStats jobs={jobs} userProfile={userProfile!} />
+            )}
           </div>
         )}
         
         {currentView === ViewState.SELECTED_JOBS && (
-            <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                      New opportunities found in your connected inbox
-                    </p>
-                </div>
+            <div className="h-full overflow-y-auto p-8">
+                <div className="mb-6"><h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1></div>
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
-                            <JobCard 
-                                key={job.id} 
-                                job={job} 
-                                onClick={(j) => { setSelectedJobId(j.id); }}
-                                isSelected={selectedJobId === job.id}
-                                isChecked={checkedJobIds.has(job.id)}
-                                onToggleCheck={handleToggleCheck}
-                                onAutoApply={(e) => {}}
-                            />
+                            <JobCard key={job.id} job={job} onClick={(j) => setSelectedJobId(j.id)} isSelected={selectedJobId === job.id} isChecked={checkedJobIds.has(job.id)} onToggleCheck={handleToggleCheck} onAutoApply={() => {}} />
                         ))}
                     </div>
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
-                        <Mail className="w-16 h-16 mb-4 opacity-10" />
-                        <p className="font-bold text-slate-600">No scanned jobs to review.</p>
-                        <p className="text-xs mt-1">Run the Inbox Scanner to detect new leads.</p>
+                        <Mail className="w-16 h-16 mb-4 opacity-10" /><p className="font-bold text-slate-600">No scanned jobs to review.</p>
                     </div>
                 )}
             </div>
         )}
 
-        {currentView === ViewState.TRACKER && (
-          <ApplicationTracker 
-            jobs={jobs} 
-            onUpdateStatus={handleJobUpdate} 
-            onDelete={handleDeleteJob} 
-            onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} 
-          />
-        )}
-
-        {currentView === ViewState.SETTINGS && (
-          <div className="h-full p-8 overflow-y-auto animate-in fade-in">
-            <Settings 
-              userProfile={userProfile!} 
-              onUpdate={handleUpdateProfile} 
-              dirHandle={dirHandle} 
-              onDirHandleChange={setDirHandle} 
-              jobs={jobs} 
-              showNotification={showNotification} 
-              onReset={() => signOut()} 
-            />
-          </div>
-        )}
-
-        {currentView === ViewState.EMAILS && (
-          <div className="h-full p-6 animate-in fade-in">
-            <InboxScanner 
-              onImport={handleAddJobs} 
-              sessionAccount={sessionAccount} 
-              onConnectSession={setSessionAccount} 
-              onDisconnectSession={() => setSessionAccount(null)} 
-              showNotification={showNotification} 
-              userPreferences={userProfile?.preferences} 
-            />
-          </div>
-        )}
-
-        {currentView === ViewState.SUBSCRIPTION && (
-          <Subscription 
-            userProfile={userProfile!} 
-            onUpdateProfile={handleUpdateProfile} 
-            showNotification={showNotification} 
-          />
-        )}
-
-        {currentView === ViewState.SUPPORT && (
-          <Support />
-        )}
-
-        {currentView === ViewState.MANUAL && (
-          <UserManual userProfile={userProfile!} />
-        )}
+        {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
+        {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
+        {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
+        {currentView === ViewState.SUBSCRIPTION && <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />}
+        {currentView === ViewState.SUPPORT && <Support />}
+        {currentView === ViewState.MANUAL && <UserManual userProfile={userProfile!} />}
       </main>
 
-      <AddJobModal 
-        isOpen={isAddJobModalOpen} 
-        onClose={() => setIsAddJobModalOpen(false)} 
-        onAdd={handleAddManualJob} 
-      />
+      <AddJobModal isOpen={isAddJobModalOpen} onClose={() => setIsAddJobModalOpen(false)} onAdd={handleAddManualJob} />
     </div>
   );
 };

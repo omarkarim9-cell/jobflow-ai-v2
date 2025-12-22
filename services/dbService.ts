@@ -9,6 +9,7 @@ const API_BASE = '/api';
 
 /**
  * Normalizes user profile data from database response to frontend interface.
+ * Handles both snake_case (DB) and camelCase (Frontend) for robustness.
  */
 const normalizeProfile = (data: any): UserProfile | null => {
     if (!data) return null;
