@@ -2,61 +2,51 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
-import { ExternalLink, Database, ShieldCheck, Zap, Lock, Info, RefreshCcw, AlertCircle, Bug } from 'lucide-react';
+import { Zap, RefreshCcw, AlertCircle, ExternalLink, Bug } from 'lucide-react';
 
 /**
- * Hardened Environment Variable Detection
- * Vite standard: import.meta.env.VITE_VARIABLE_NAME
+ * Enhanced Environment Variable Detection
+ * Prioritizes Vite-standard 'import.meta.env'
  */
 const getEnv = (key: string): string => {
     const viteKey = `VITE_${key}`;
     
-    // @ts-ignore - Check Vite standard first
+    // @ts-ignore - Vite environment
     const meta = import.meta.env;
     if (meta && meta[viteKey]) return String(meta[viteKey]);
-    if (meta && meta[key]) return String(meta[key]);
-
-    // Check window/process for edge cases or non-Vite environments
-    try {
-        const winEnv = (window as any).process?.env || {};
-        if (winEnv[viteKey]) return winEnv[viteKey];
-        if (winEnv[key]) return winEnv[key];
-        
-        // Final fallback to checking if Vite defined it in the global scope
-        if (typeof process !== 'undefined' && process.env) {
-            return process.env[viteKey] || process.env[key] || "";
-        }
-    } catch (e) {}
     
-    return "";
+    // Fallback for non-Vite contexts or global injections
+    try {
+        const globalEnv = (window as any).process?.env || {};
+        return globalEnv[viteKey] || globalEnv[key] || "";
+    } catch (e) {
+        return "";
+    }
 };
 
 const CLERK_KEY = getEnv('CLERK_PUBLISHABLE_KEY');
 const GEMINI_KEY = getEnv('API_KEY');
 
-// Log status for developer debugging (visible in browser console)
-console.log('--- JobFlow AI Configuration Debug ---');
-console.log('Clerk Key Detected:', CLERK_KEY ? 'YES (Starts with ' + CLERK_KEY.substring(0, 8) + '...)' : 'NO');
-console.log('Gemini Key Detected:', GEMINI_KEY ? 'YES (Length: ' + GEMINI_KEY.length + ')' : 'NO');
-console.log('---------------------------------------');
+// Minimal safe logging for build verification
+// @ts-ignore - Vite environment detection fix
+if (import.meta.env?.DEV) {
+    console.log('[JobFlow] Clerk Configured:', !!CLERK_KEY);
+    console.log('[JobFlow] Gemini Configured:', !!GEMINI_KEY);
+}
 
-// Inject into process.env for @google/genai SDK compatibility
+// Ensure process.env.API_KEY is available for the @google/genai SDK
 if (typeof window !== 'undefined') {
     (window as any).process = (window as any).process || { env: {} };
-    if (GEMINI_KEY) {
-        (window as any).process.env.API_KEY = GEMINI_KEY;
-    }
+    if (GEMINI_KEY) (window as any).process.env.API_KEY = GEMINI_KEY;
 }
 
 const ConfigurationGuard: React.FC = () => {
-    const [isChecking, setIsChecking] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     
-    const hasClerk = CLERK_KEY && CLERK_KEY.length > 25;
-    const hasGemini = GEMINI_KEY && GEMINI_KEY.length > 20;
-    const isConfigured = hasClerk && hasGemini;
+    const isConfigured = (CLERK_KEY?.length > 20) && (GEMINI_KEY?.length > 20);
 
     const handleRefresh = () => {
-        setIsChecking(true);
+        setIsRefreshing(true);
         window.location.reload();
     };
 
@@ -68,75 +58,50 @@ const ConfigurationGuard: React.FC = () => {
                         <Zap className="w-10 h-10" />
                     </div>
                     
-                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">Finalizing Connection</h1>
+                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">System Link Required</h1>
                     <p className="text-slate-500 mb-8 text-center leading-relaxed text-sm">
-                        You've updated the variable names, but the browser isn't seeing them yet. This usually means a <strong>Redeploy</strong> is needed on Vercel.
+                        To run JobFlow, your environment variables must be "baked in" during the build process.
                     </p>
                     
-                    <div className="space-y-4 mb-8">
-                        <div className={`p-5 rounded-2xl border flex flex-col gap-3 transition-all ${hasClerk ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${hasClerk ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`}></div>
-                                    <span className="text-sm font-bold text-slate-700">Clerk Auth</span>
-                                </div>
-                                {hasClerk ? <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Active</span> : <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Missing</span>}
-                            </div>
-                            {!hasClerk && (
-                                <div className="text-[10px] text-slate-500 font-mono bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                    Expected: VITE_CLERK_PUBLISHABLE_KEY
-                                </div>
-                            )}
+                    <div className="space-y-3 mb-8">
+                        <div className={`p-4 rounded-2xl border flex items-center justify-between ${CLERK_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                            <span className="text-xs font-bold uppercase tracking-widest">VITE_CLERK_PUBLISHABLE_KEY</span>
+                            {CLERK_KEY ? <span className="text-[10px] font-black uppercase">Active</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
                         </div>
-
-                        <div className={`p-5 rounded-2xl border flex flex-col gap-3 transition-all ${hasGemini ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${hasGemini ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`}></div>
-                                    <span className="text-sm font-bold text-slate-700">Gemini AI</span>
-                                </div>
-                                {hasGemini ? <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Active</span> : <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Missing</span>}
-                            </div>
-                            {!hasGemini && (
-                                <div className="text-[10px] text-slate-500 font-mono bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                    Expected: VITE_API_KEY
-                                </div>
-                            )}
+                        <div className={`p-4 rounded-2xl border flex items-center justify-between ${GEMINI_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                            <span className="text-xs font-bold uppercase tracking-widest">VITE_API_KEY</span>
+                            {GEMINI_KEY ? <span className="text-[10px] font-black uppercase">Active</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
                         </div>
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8">
-                        <div className="flex gap-3 mb-3">
-                            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                            <div className="text-xs text-amber-800 font-bold">Important Deployment Note</div>
-                        </div>
-                        <p className="text-xs text-amber-700 leading-relaxed ps-8">
-                            Environment variables in Vite are "baked in" during the build process. Adding them to Vercel settings doesn't change a running app. You must <strong>Trigger a Redeploy</strong> to inject the new keys.
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8 flex gap-4">
+                        <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+                        <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                            <strong>Note:</strong> Vercel requires a <strong>Redeploy</strong> after you add new environment variables for them to take effect in the browser.
                         </p>
                     </div>
 
                     <div className="flex gap-3">
                         <button 
                             onClick={handleRefresh}
-                            disabled={isChecking}
                             className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                         >
-                            {isChecking ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-                            I've Redeployed, Refresh
+                            <RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            Refresh After Redeploy
                         </button>
                         <a 
                             href="https://vercel.com/dashboard" 
                             target="_blank" 
-                            rel="noreferrer"
                             className="p-4 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all"
-                            title="Vercel Dashboard"
                         >
                             <ExternalLink className="w-5 h-5" />
                         </a>
                     </div>
                     
-                    <div className="mt-8 pt-8 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
-                        <Bug className="w-3 h-3" /> Check Browser Console for Logs
+                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                           <Bug className="w-3 h-3" /> Check Browser Console for details
+                        </p>
                     </div>
                 </div>
             </div>

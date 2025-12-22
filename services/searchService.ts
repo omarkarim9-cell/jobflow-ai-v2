@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 export const findJobLink = async (title: string, company: string): Promise<string | null> => {
@@ -9,11 +8,12 @@ export const findJobLink = async (title: string, company: string): Promise<strin
   }
 
   try {
-    // @ts-ignore
+    // Initialize Gemini client with the API key from environment
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    // Using gemini-3-flash-preview for basic text tasks with search grounding
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: `Find the official job application page for the position of "${title}" at "${company}". 
       Prioritize direct company career pages over job boards. 
       If using a job board like Indeed or LinkedIn, ensure the link is to the specific job post.`,
