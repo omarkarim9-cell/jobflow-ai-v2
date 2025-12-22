@@ -4,10 +4,15 @@ import { Job } from "../types";
 /**
  * Gemini Service
  * Uses Gemini 3 models for high-quality extraction and document generation.
- * API Key is provided via process.env.API_KEY.
  */
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAi = () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        throw new Error("API_KEY is not defined in the environment.");
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
 const soupify = (html: string): string => {
     const parser = new DOMParser();
@@ -20,18 +25,16 @@ const soupify = (html: string): string => {
     return doc.body.textContent || "";
 };
 
-// Fix: Exported missing getSmartApplicationUrl utility function used by automationService.
 /**
  * Processes a URL to ensure it is the most direct application link.
- * Used by the automation service before launching browser windows.
  */
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
     if (!url) return "";
-    // Future enhancement: Add logic to clean tracking parameters or resolve redirects.
     return url;
 };
 
 export const extractJobsFromEmailHtml = async (html: string, userKeywords: string[]): Promise<Partial<Job>[]> => {
+    const ai = getAi();
     const structuredText = soupify(html).substring(0, 20000);
     const prompt = `
     You are an expert recruitment AI. Extract job opportunities from the following text. 
@@ -85,6 +88,7 @@ export const generateCoverLetter = async (
     name: string, 
     email: string
 ): Promise<string> => {
+    const ai = getAi();
     const prompt = `
     Write a high-impact, professional cover letter for the following position:
     Role: ${title}
@@ -114,6 +118,7 @@ export const customizeResume = async (
     description: string, 
     resume: string
 ): Promise<string> => {
+    const ai = getAi();
     const prompt = `
     Tailor the following resume for a specific job application.
     Target Role: ${title} at ${company}
@@ -141,6 +146,7 @@ export const customizeResume = async (
 };
 
 export const extractJobFromUrl = async (url: string): Promise<any> => {
+    const ai = getAi();
     const prompt = `Extract full job details from this URL: ${url}. Return title, company, location, and a detailed description.`;
     
     const response = await ai.models.generateContent({
@@ -152,7 +158,6 @@ export const extractJobFromUrl = async (url: string): Promise<any> => {
     });
 
     const text = response.text || "";
-    // Simplified parsing of the LLM text for extraction
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     return jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Extracted Role', company: 'Check Site', description: text };
 };

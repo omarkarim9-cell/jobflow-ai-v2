@@ -9,6 +9,12 @@ import { ExternalLink, Database, ShieldCheck, Zap, Lock, Info } from 'lucide-rea
  */
 const getEnv = (key: string): string => {
     try {
+        // 1. Check window.process.env (for platform injections)
+        if (typeof window !== 'undefined' && (window as any).process?.env?.[key]) {
+            return (window as any).process.env[key];
+        }
+
+        // 2. Check import.meta.env (for Vite environments)
         // @ts-ignore
         if (typeof import.meta !== 'undefined' && import.meta.env) {
             // @ts-ignore
@@ -16,6 +22,7 @@ const getEnv = (key: string): string => {
             if (v && v !== 'undefined') return String(v);
         }
 
+        // 3. Fallback to global process.env
         if (typeof process !== 'undefined' && process.env) {
             const p = process.env[`VITE_${key}`] || 
                       process.env[key] || 
