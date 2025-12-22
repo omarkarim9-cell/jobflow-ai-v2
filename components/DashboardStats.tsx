@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity } from 'lucide-react';
+import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity, Search } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { translations } from '../services/localization';
 
@@ -15,22 +15,25 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
   const lang = userProfile?.preferences.language || 'en';
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
+  // Tracked jobs are those that have moved past detection or are being actively monitored
   const trackedJobs = useMemo(() => jobs.filter(j => j.status !== JobStatus.DETECTED), [jobs]);
+  const detectedJobsCount = useMemo(() => jobs.filter(j => j.status === JobStatus.DETECTED).length, [jobs]);
 
   const stats = useMemo(() => {
     return {
+      total: jobs.length,
       active: trackedJobs.length,
       applied: trackedJobs.filter(j => j.status === JobStatus.APPLIED_AUTO || j.status === JobStatus.APPLIED_MANUAL).length,
       interviews: trackedJobs.filter(j => j.status === JobStatus.INTERVIEW).length,
       offers: trackedJobs.filter(j => j.status === JobStatus.OFFER).length,
     };
-  }, [trackedJobs]);
+  }, [jobs, trackedJobs]);
 
   const funnelData = [
-      { name: 'Saved', value: trackedJobs.length, color: '#94a3b8' },
-      { name: 'Applied', value: stats.applied, color: '#6366f1' },
-      { name: 'Interview', value: stats.interviews, color: '#8b5cf6' },
-      { name: 'Offer', value: stats.offers, color: '#10b981' },
+      { name: 'Scanned', value: stats.total, color: '#94a3b8' },
+      { name: 'Saved', value: stats.active, color: '#6366f1' },
+      { name: 'Applied', value: stats.applied, color: '#8b5cf6' },
+      { name: 'Interview', value: stats.interviews, color: '#10b981' },
   ];
 
   const chartData = useMemo(() => {
@@ -40,7 +43,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('en-US', { weekday: 'short' }); 
       
-      const count = trackedJobs.filter(job => {
+      const count = jobs.filter(job => {
         const jobDate = new Date(job.detectedAt);
         return jobDate.getDate() === d.getDate() && 
                jobDate.getMonth() === d.getMonth() && 
@@ -50,7 +53,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       days.push({ name: dateStr, activity: count });
     }
     return days;
-  }, [trackedJobs]);
+  }, [jobs]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -76,12 +79,12 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-slate-300 transition-all hover:shadow-md group">
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tracked Jobs</p>
-            <h3 className="text-3xl font-black text-slate-900 mt-1">{stats.active}</h3>
-            <p className="text-[10px] text-slate-400 mt-1">Active Pipeline</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Scanned</p>
+            <h3 className="text-3xl font-black text-slate-900 mt-1">{stats.total}</h3>
+            <p className="text-[10px] text-slate-400 mt-1">{detectedJobsCount} New Leads</p>
           </div>
           <div className="p-3 bg-slate-50 text-slate-400 rounded-xl group-hover:bg-slate-100 transition-colors">
-            <Filter className="w-6 h-6" />
+            <Search className="w-6 h-6" />
           </div>
         </div>
         
@@ -150,48 +153,22 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
                 <TrendingUp className="w-4 h-4 me-2 text-indigo-500" />
                 Activity Trend
             </h3>
+            {/* Fix: Completed the truncated code and provided value for the style property */}
             <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                    <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
-                    dy={10}
-                    />
-                    <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
-                    allowDecimals={false}
-                    />
-                    <Tooltip 
-                    contentStyle={{
-                        backgroundColor: '#fff', 
-                        borderRadius: '12px', 
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-                    }}
-                    itemStyle={{color: '#475569', fontSize: '11px', fontWeight: 800}}
-                    cursor={{stroke: '#cbd5e1', strokeWidth: 1}}
-                    />
-                    <Area 
-                    type="monotone" 
-                    dataKey="activity" 
-                    stroke="#6366f1" 
-                    strokeWidth={4}
-                    fillOpacity={1} 
-                    fill="url(#colorActivity)" 
-                    />
-                </AreaChart>
+                    <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                        <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                        <Area type="monotone" dataKey="activity" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorActivity)" />
+                    </AreaChart>
                 </ResponsiveContainer>
             </div>
           </div>
