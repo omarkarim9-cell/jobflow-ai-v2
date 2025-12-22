@@ -27,7 +27,8 @@ import {
   Settings as SettingsIcon, 
   Loader2,
   List,
-  LogOut
+  LogOut,
+  Search as SearchIcon
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -40,7 +41,6 @@ export const App: React.FC = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isAddJobModalOpen, setIsAddJobModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [checkedJobIds, setCheckedJobIds] = useState<Set<string>>(new Set());
   const [sessionAccount, setSessionAccount] = useState<EmailAccount | null>(null);
   const [dirHandle, setDirHandle] = useState<any>(null);
@@ -59,13 +59,13 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-        syncWithNeon();
+        syncData();
     } else if (isLoaded) {
         setLoading(false);
     }
   }, [isLoaded, isSignedIn]);
 
-  const syncWithNeon = async () => {
+  const syncData = async () => {
       setLoading(true);
       try {
           const token = await getToken();
@@ -90,12 +90,13 @@ export const App: React.FC = () => {
           setUserProfile(profile);
           
           const dbJobs = await fetchJobsFromDb(token);
-          setJobs(dbJobs.filter(j => j.status !== JobStatus.DETECTED));
+          // FIX: Include all jobs in the local state, even DETECTED ones
+          setJobs(dbJobs);
           
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
       } catch (e) {
-          console.error("Neon Sync Error", e);
+          console.error("Data Sync Error", e);
       } finally {
           setLoading(false);
       }
@@ -133,6 +134,10 @@ export const App: React.FC = () => {
         const unique = newJobs.filter(j => !j.applicationUrl || !existingUrls.has(j.applicationUrl));
         return [...unique, ...prev];
     });
+    // Persist to DB
+    getToken().then(token => {
+        if (token) newJobs.forEach(job => saveJobToDb(job, token));
+    });
     showNotification(`Imported ${newJobs.length} jobs.`, 'success');
   };
 
@@ -166,6 +171,7 @@ export const App: React.FC = () => {
   }
 
   const trackedJobsCount = jobs.filter(j => j.status !== JobStatus.DETECTED).length;
+  const detectedJobsCount = jobs.filter(j => j.status === JobStatus.DETECTED).length;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -187,15 +193,24 @@ export const App: React.FC = () => {
             <LayoutDashboard className="w-5 h-5 me-3" />
             <span className="flex-1 text-start font-bold text-sm">Dashboard</span>
           </button>
+          
+          <button onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <SearchIcon className="w-5 h-5 me-3" />
+            <span className="flex-1 text-start font-bold text-sm">Scanned Jobs</span>
+            {detectedJobsCount > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">{detectedJobsCount}</span>}
+          </button>
+
           <button onClick={() => setCurrentView(ViewState.TRACKER)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.TRACKER ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <List className="w-5 h-5 me-3" />
             <span className="flex-1 text-start font-bold text-sm">Applications</span>
-            {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
+            {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
           </button>
+          
           <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <Mail className="w-5 h-5 me-3" />
             <span className="flex-1 text-start font-bold text-sm">Inbox Scanner</span>
           </button>
+          
           <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
             <SettingsIcon className="w-5 h-5 me-3" />
             <span className="flex-1 text-start font-bold text-sm">Settings</span>
@@ -212,6 +227,39 @@ export const App: React.FC = () => {
 
       <main className="flex-1 overflow-hidden relative">
         {currentView === ViewState.DASHBOARD && <div className="h-full overflow-y-auto p-8"><DashboardStats jobs={jobs} userProfile={userProfile!} /></div>}
+        
+        {currentView === ViewState.SELECTED_JOBS && (
+            <div className="h-full overflow-y-auto p-8">
+                <div className="mb-6 flex justify-between items-end">
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
+                        <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">New leads detected from inbox</p>
+                    </div>
+                </div>
+                {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
+                            <JobCard 
+                                key={job.id} 
+                                job={job} 
+                                onClick={(j) => { setSelectedJobId(j.id); }}
+                                isSelected={selectedJobId === job.id}
+                                isChecked={checkedJobIds.has(job.id)}
+                                onToggleCheck={handleToggleCheck}
+                                onAutoApply={(e) => {}}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
+                        <Mail className="w-16 h-16 mb-4 opacity-10" />
+                        <p className="font-bold text-slate-600">No scanned jobs to review.</p>
+                        <p className="text-xs mt-1">Run the Inbox Scanner to find new opportunities.</p>
+                    </div>
+                )}
+            </div>
+        )}
+
         {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
         {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
         {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
