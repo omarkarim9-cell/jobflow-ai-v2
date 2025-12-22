@@ -3,9 +3,13 @@ import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from './types';
 import { DashboardStats } from './components/DashboardStats';
 import { JobCard } from './components/JobCard';
+import { JobDetail } from './components/JobDetail';
 import { InboxScanner } from './components/InboxScanner';
 import { Onboarding } from './components/Onboarding';
 import { Settings } from './components/Settings';
+import { UserManual } from './components/UserManual';
+import { Subscription } from './components/Subscription';
+import { Support } from './components/Support';
 import { AddJobModal } from './components/AddJobModal';
 import { Auth } from './components/Auth';
 import { ApplicationTracker } from './components/ApplicationTracker';
@@ -24,10 +28,13 @@ import {
   Briefcase, 
   Mail, 
   Settings as SettingsIcon, 
+  Search as SearchIcon,
   Loader2,
   List,
   LogOut,
-  Search as SearchIcon
+  CreditCard,
+  BookOpen,
+  LifeBuoy
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -57,6 +64,7 @@ export const App: React.FC = () => {
    */
   const needsOnboarding = useMemo(() => {
     if (!isSignedIn || !userProfile) return false;
+    // We check if resumeContent is missing, which is the primary indicator of an incomplete profile.
     return !userProfile.resumeContent || userProfile.resumeContent.trim().length < 10;
   }, [isSignedIn, userProfile]);
 
@@ -80,7 +88,7 @@ export const App: React.FC = () => {
           let profile = await getUserProfile(token).catch(() => null);
           
           if (!profile && user) {
-              // Create local default but don't force save until they finish onboarding
+              // Initial default profile for new users
               profile = {
                   id: user.id,
                   fullName: user.fullName || 'User',
@@ -117,6 +125,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
+    // Update local state first to immediately dismiss onboarding if necessary
     setUserProfile(updatedProfile);
     
     try {
@@ -175,6 +184,8 @@ export const App: React.FC = () => {
     setCheckedJobIds(newChecked);
   };
 
+  // --- RENDERING LOGIC ---
+
   if (!isLoaded || loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -183,10 +194,12 @@ export const App: React.FC = () => {
     );
   }
 
+  // FIRST: Force sign in
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
 
+  // SECOND: Force onboarding if signed in but profile is empty
   if (needsOnboarding) {
     return (
       <Onboarding 
@@ -198,6 +211,7 @@ export const App: React.FC = () => {
     );
   }
 
+  // THIRD: Main Application Shell
   const trackedJobsCount = jobs.filter(j => j.status !== JobStatus.DETECTED).length;
   const detectedJobsCount = jobs.filter(j => j.status === JobStatus.DETECTED).length;
 
@@ -263,6 +277,32 @@ export const App: React.FC = () => {
           >
             <Mail className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Inbox Scanner</span>
+          </button>
+
+          <div className="my-2 border-t border-slate-100" />
+
+          <button 
+            onClick={() => setCurrentView(ViewState.SUBSCRIPTION)} 
+            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUBSCRIPTION ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <CreditCard className="w-5 h-5 me-3" />
+            <span className="flex-1 text-start text-sm">Subscription</span>
+          </button>
+
+          <button 
+            onClick={() => setCurrentView(ViewState.SUPPORT)} 
+            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUPPORT ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <LifeBuoy className="w-5 h-5 me-3" />
+            <span className="flex-1 text-start text-sm">Support</span>
+          </button>
+
+          <button 
+            onClick={() => setCurrentView(ViewState.MANUAL)} 
+            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.MANUAL ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <BookOpen className="w-5 h-5 me-3" />
+            <span className="flex-1 text-start text-sm">Help Guide</span>
           </button>
           
           <button 
@@ -358,6 +398,22 @@ export const App: React.FC = () => {
               userPreferences={userProfile?.preferences} 
             />
           </div>
+        )}
+
+        {currentView === ViewState.SUBSCRIPTION && (
+          <Subscription 
+            userProfile={userProfile!} 
+            onUpdateProfile={handleUpdateProfile} 
+            showNotification={showNotification} 
+          />
+        )}
+
+        {currentView === ViewState.SUPPORT && (
+          <Support />
+        )}
+
+        {currentView === ViewState.MANUAL && (
+          <UserManual userProfile={userProfile!} />
         )}
       </main>
 
