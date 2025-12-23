@@ -13,7 +13,8 @@ import {
     AlertCircle, 
     Tag,
     ChevronRight,
-    Split
+    Split,
+    RefreshCw
 } from 'lucide-react';
 import { NotificationType } from './NotificationToast';
 
@@ -157,7 +158,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                 className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-xl shadow-indigo-100 transition-all"
               >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                Generate Personalized CV
+                Generated Resume and Letter
               </button>
             </div>
 
@@ -203,7 +204,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                   className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-3 shadow-2xl shadow-indigo-200 transition-all"
                 >
                   {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  Tailor Documents Now
+                  Generate Documents Now
                 </button>
               </div>
             ) : (
@@ -304,13 +305,3 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     </div>
   );
 };
-
-// Internal utility component for the re-tailor icon
-const RefreshCw = ({ className }: { className?: string }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-        <path d="M3 3v5h5" />
-        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-        <path d="M16 16h5v5" />
-    </svg>
-);
