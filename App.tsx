@@ -4,7 +4,6 @@ import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from './types';
 import { DashboardStats } from './components/DashboardStats';
 import { JobCard } from './components/JobCard';
 import { InboxScanner } from './components/InboxScanner';
-import { Onboarding } from './components/Onboarding';
 import { Settings } from './components/Settings';
 import { UserManual } from './components/UserManual';
 import { Subscription } from './components/Subscription';
@@ -15,6 +14,7 @@ import { ApplicationTracker } from './components/ApplicationTracker';
 import { NotificationToast, NotificationType } from './components/NotificationToast';
 import { createVirtualDirectory } from './services/fileSystemService';
 import { LanguageCode } from './services/localization';
+import { customizeResume, generateCoverLetter } from './services/geminiService';
 import { 
   fetchJobsFromDb, 
   getUserProfile, 
@@ -35,7 +35,11 @@ import {
   BookOpen,
   LifeBuoy,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  Wand2,
+  CheckCircle,
+  X
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -52,6 +56,7 @@ export const App: React.FC = () => {
   const [sessionAccount, setSessionAccount] = useState<EmailAccount | null>(null);
   const [dirHandle, setDirHandle] = useState<any>(null);
   const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const lang = (userProfile?.preferences?.language as LanguageCode) || 'en';
   const isRtl = lang === 'ar';
@@ -94,11 +99,10 @@ export const App: React.FC = () => {
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
           
-          // Land on Dashboard
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Cloud sync failed.", "error");
+          showNotification("Cloud sync unavailable. Working in local mode.", "error");
       } finally {
           setLoading(false);
       }
@@ -118,10 +122,13 @@ export const App: React.FC = () => {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile updated.", "success");
+            showNotification("Profile synced to cloud.", "success");
+        } else {
+            showNotification("Saved locally (No token).", "success");
         }
     } catch (error) {
-        showNotification("Local save successful. Cloud sync pending.", "error");
+        // Misleading "error" styling fixed here - it's a success in local terms
+        showNotification("Saved locally. Cloud sync pending.", "success");
     }
   };
   
@@ -167,6 +174,74 @@ export const App: React.FC = () => {
     if (newChecked.has(id)) newChecked.delete(id);
     else newChecked.add(id);
     setCheckedJobIds(newChecked);
+  };
+
+  const handleClearScannedJobs = async () => {
+    if (window.confirm("This will remove all detected jobs from the scanned list. Continue?")) {
+        const detectedIds = jobs.filter(j => j.status === JobStatus.DETECTED).map(j => j.id);
+        setJobs(prev => prev.filter(j => j.status !== JobStatus.DETECTED));
+        const token = await getToken();
+        if (token) {
+            for (const id of detectedIds) {
+                await deleteJobFromDb(id, token);
+            }
+        }
+        setCheckedJobIds(new Set());
+        showNotification("Scanned list cleared.", "success");
+    }
+  };
+
+  const handleBulkClearChecked = async () => {
+      const idsToDelete = Array.from(checkedJobIds);
+      setJobs(prev => prev.filter(j => !checkedJobIds.has(j.id)));
+      const token = await getToken();
+      if (token) {
+          for (const id of idsToDelete) {
+              await deleteJobFromDb(id, token);
+          }
+      }
+      setCheckedJobIds(new Set());
+      showNotification(`Removed ${idsToDelete.length} jobs.`, "success");
+  };
+
+  const handleBulkGenerateDocs = async () => {
+    if (!userProfile?.resumeContent || userProfile.resumeContent.length < 10) {
+        showNotification("Upload a resume in Settings first!", "error");
+        return;
+    }
+
+    setIsBulkProcessing(true);
+    const selectedJobs = jobs.filter(j => checkedJobIds.has(j.id));
+    const token = await getToken();
+    let count = 0;
+
+    try {
+        const updatedJobs = [...jobs];
+        for (const job of selectedJobs) {
+            if (job.customizedResume) continue; // Skip if already done
+            
+            showNotification(`Processing ${job.company}...`, 'success');
+            
+            const [newResume, newLetter] = await Promise.all([
+                customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
+                generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
+            ]);
+
+            const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
+            const index = updatedJobs.findIndex(j => j.id === job.id);
+            if (index !== -1) updatedJobs[index] = updatedJob;
+
+            if (token) await saveJobToDb(updatedJob, token);
+            count++;
+        }
+        setJobs(updatedJobs);
+        showNotification(`Generated documents for ${count} jobs.`, "success");
+    } catch (e) {
+        showNotification("Bulk generation interrupted.", "error");
+    } finally {
+        setIsBulkProcessing(false);
+        setCheckedJobIds(new Set());
+    }
   };
 
   if (!isLoaded || loading) {
@@ -282,7 +357,7 @@ export const App: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold">Complete your profile</h4>
-                    <p className="text-xs text-indigo-100">Upload a resume to unlock AI tailoring features.</p>
+                    <p className="text-xs text-indigo-100">AI needs your resume to customize applications.</p>
                   </div>
                 </div>
                 <button 
@@ -298,17 +373,69 @@ export const App: React.FC = () => {
         )}
         
         {currentView === ViewState.SELECTED_JOBS && (
-            <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-                <div className="mb-6"><h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1></div>
+            <div className="h-full overflow-y-auto p-8 animate-in fade-in relative pb-24">
+                <div className="mb-6 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
+                        <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-widest">Leads found from your inbox</p>
+                    </div>
+                    {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 && (
+                        <button 
+                            onClick={handleClearScannedJobs}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-black uppercase transition-colors"
+                        >
+                            <Trash2 className="w-3 h-3" /> Clear List
+                        </button>
+                    )}
+                </div>
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
-                            <JobCard key={job.id} job={job} onClick={(j) => setSelectedJobId(j.id)} isSelected={selectedJobId === job.id} isChecked={checkedJobIds.has(job.id)} onToggleCheck={handleToggleCheck} onAutoApply={() => {}} />
+                            <JobCard 
+                                key={job.id} 
+                                job={job} 
+                                onClick={(j) => setSelectedJobId(j.id)} 
+                                isSelected={selectedJobId === job.id} 
+                                isChecked={checkedJobIds.has(job.id)} 
+                                onToggleCheck={handleToggleCheck} 
+                                onAutoApply={() => {}} 
+                            />
                         ))}
                     </div>
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
-                        <Mail className="w-16 h-16 mb-4 opacity-10" /><p className="font-bold text-slate-600">No scanned jobs to review.</p>
+                        <Mail className="w-16 h-16 mb-4 opacity-10" />
+                        <p className="font-bold text-slate-600">No scanned jobs found.</p>
+                        <button onClick={() => setCurrentView(ViewState.EMAILS)} className="mt-4 text-xs font-black text-indigo-600 hover:underline">RUN INBOX SCANNER</button>
+                    </div>
+                )}
+
+                {/* Floating Bulk Action Bar */}
+                {checkedJobIds.size > 0 && (
+                    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 border border-white/10 animate-in slide-in-from-bottom-8 duration-500`}>
+                        <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                            <span className="bg-indigo-600 text-[10px] font-black px-2 py-1 rounded-full">{checkedJobIds.size}</span>
+                            <span className="text-xs font-bold uppercase tracking-widest">Selected</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={handleBulkGenerateDocs}
+                                disabled={isBulkProcessing}
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                            >
+                                {isBulkProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                                Generate AI Docs
+                            </button>
+                            
+                            <button 
+                                onClick={handleBulkClearChecked}
+                                disabled={isBulkProcessing}
+                                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                            >
+                                <X className="w-3 h-3" /> Remove
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
