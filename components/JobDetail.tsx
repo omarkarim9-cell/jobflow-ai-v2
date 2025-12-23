@@ -10,10 +10,8 @@ import {
     Download, 
     X, 
     CheckCircle2, 
-    AlertCircle, 
     Tag,
     ChevronRight,
-    Split,
     RefreshCw
 } from 'lucide-react';
 import { NotificationType } from './NotificationToast';
@@ -31,7 +29,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'ai-docs'>('details');
   
-  // Local state for live preview/editing
   const [resumeText, setResumeText] = useState<string>(job.customizedResume || userProfile.resumeContent || '');
   const [letterText, setLetterText] = useState<string>(job.coverLetter || '');
 
@@ -39,7 +36,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
       if (showNotification) showNotification(msg, type);
   };
 
-  // Keep local state in sync with job object
   useEffect(() => {
       setResumeText(job.customizedResume || userProfile.resumeContent || '');
       setLetterText(job.coverLetter || '');
@@ -48,15 +44,11 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
       }
   }, [job, userProfile.resumeContent]);
 
-  // TAILORING ANALYSIS: Extracts keywords to prove personalization
   const tailoringAnalysis = useMemo(() => {
       if (!job.customizedResume) return null;
-      
       const jobWords = job.description.toLowerCase().match(/\b(react|node|typescript|aws|python|javascript|cloud|docker|kubernetes|manager|lead|frontend|backend|fullstack|sql|api)\b/g) || [];
       const uniqueKeywords = Array.from(new Set(jobWords));
-      
       const foundInResume = uniqueKeywords.filter(kw => job.customizedResume?.toLowerCase().includes(kw));
-      
       return {
           keywordsFound: foundInResume,
           totalKeywords: uniqueKeywords.length,
@@ -76,12 +68,12 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     try {
         let finalResume = "";
         try {
-            finalResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+            finalResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent, userProfile.email);
         } catch (e) {
-            finalResume = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+            finalResume = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent, userProfile.email);
         }
         
-        await new Promise(r => setTimeout(r, 1500)); // Buffer for API stability
+        await new Promise(r => setTimeout(r, 1200));
 
         let finalLetter = "";
         try {
@@ -102,7 +94,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
         setActiveTab('ai-docs');
     } catch (e) {
         console.error("AI Generation Error:", e);
-        notify("Tailoring interrupted. Check your network.", "error");
+        notify("Tailoring interrupted.", "error");
     } finally {
         setIsGenerating(false);
     }
@@ -123,7 +115,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
 
   return (
     <div className="flex flex-col h-full bg-white relative">
-      {/* Tab Navigation */}
       <div className="flex border-b border-slate-100 shrink-0">
         <button 
           onClick={() => setActiveTab('details')}
@@ -144,7 +135,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
           <div className="space-y-8 animate-in fade-in duration-300 max-w-4xl mx-auto">
             <div className="flex items-start justify-between bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
               <div className="flex items-center gap-6">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-100">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black">
                   {job.company.charAt(0)}
                 </div>
                 <div>
@@ -162,124 +153,59 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Compatibility</p>
-                <div className="flex items-center gap-2">
-                   <p className="text-xl font-black text-slate-900">{job.matchScore}%</p>
-                   {job.matchScore > 80 && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                </div>
-              </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Region</p>
-                <p className="text-sm font-bold text-slate-700">{job.location}</p>
-              </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Source</p>
-                <p className="text-sm font-bold text-slate-700">{job.source}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                 <FileText className="w-3 h-3" /> Posting Content
-              </h3>
-              <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-                {job.description}
-              </div>
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Job Details</h3>
+               <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{job.description}</div>
             </div>
           </div>
         ) : (
           <div className="h-full flex flex-col animate-in fade-in duration-300 max-w-6xl mx-auto">
             {!job.customizedResume ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-white rounded-[3rem] border border-dashed border-slate-300 mt-4">
-                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mb-6">
-                  <Wand2 className="w-10 h-10" />
-                </div>
-                <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">Personalization Required</h3>
-                <p className="text-sm text-slate-500 max-w-xs mb-8">AI needs to analyze the job description to tailor your resume and draft a high-impact cover letter.</p>
-                <button 
-                  onClick={handleGenerateDocuments}
-                  disabled={isGenerating}
-                  className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-3 shadow-2xl shadow-indigo-200 transition-all"
-                >
-                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  Generate Documents Now
-                </button>
+                <Wand2 className="w-12 h-12 text-indigo-200 mb-6" />
+                <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">Tailoring Required</h3>
+                <p className="text-sm text-slate-500 max-w-xs mb-8">Click the button in the 'Job Description' tab to generate your verified documents.</p>
               </div>
             ) : (
               <div className="space-y-6 pb-20">
-                {/* Customization Analysis Banner */}
                 {tailoringAnalysis && (
                     <div className="bg-indigo-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-xl shadow-indigo-900/10">
                         <div className="flex items-center gap-4">
-                            <div className="p-2 bg-white/10 rounded-xl">
-                                <Sparkles className="w-5 h-5 text-indigo-300" />
-                            </div>
+                            <Sparkles className="w-5 h-5 text-indigo-300" />
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Customization Analysis</p>
-                                <p className="text-xs font-bold flex items-center gap-2 mt-0.5">
-                                    {tailoringAnalysis.confidence} — {tailoringAnalysis.keywordsFound.length} Target Keywords Injected
-                                </p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Tailoring Confidence</p>
+                                <p className="text-xs font-bold">{tailoringAnalysis.confidence} — {tailoringAnalysis.keywordsFound.length} Keywords Matching</p>
                             </div>
-                        </div>
-                        <div className="flex gap-1.5 overflow-hidden">
-                            {tailoringAnalysis.keywordsFound.slice(0, 5).map(kw => (
-                                <span key={kw} className="px-2 py-0.5 bg-white/10 rounded-md text-[9px] font-black uppercase tracking-tighter">
-                                    {kw}
-                                </span>
-                            ))}
                         </div>
                     </div>
                 )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
-                  {/* TAILORED RESUME PREVIEW */}
-                  <div className="flex flex-col h-[600px] bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm group">
+                  <div className="flex flex-col h-[600px] bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm">
                     <div className="p-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                         <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-                             <FileText className="w-4 h-4" />
-                         </div>
-                         <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Tailored Resume</h4>
-                      </div>
-                      <button 
-                        onClick={() => downloadTextFile(`${job.company}_Resume.txt`, resumeText)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-2"
-                        title="Download Asset"
-                      >
-                        <Download className="w-3 h-3" /> Download
+                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Tailored Resume</h4>
+                      <button onClick={() => downloadTextFile(`${job.company}_Resume.txt`, resumeText)} className="text-indigo-600">
+                        <Download className="w-4 h-4" />
                       </button>
                     </div>
                     <textarea 
                       value={resumeText}
                       onChange={(e) => setResumeText(e.target.value)}
-                      className="flex-1 p-8 bg-white text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none custom-scrollbar focus:ring-1 focus:ring-indigo-100"
+                      className="flex-1 p-8 bg-white text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none"
                     />
                   </div>
 
-                  {/* COVER LETTER PREVIEW */}
-                  <div className="flex flex-col h-[600px] bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm group">
+                  <div className="flex flex-col h-[600px] bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm">
                     <div className="p-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                         <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
-                             <Tag className="w-4 h-4" />
-                         </div>
-                         <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Custom Cover Letter</h4>
-                      </div>
-                      <button 
-                        onClick={() => downloadTextFile(`${job.company}_Letter.txt`, letterText)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-purple-50 hover:text-purple-600 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-2"
-                        title="Download Asset"
-                      >
-                        <Download className="w-3 h-3" /> Download
+                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Cover Letter</h4>
+                      <button onClick={() => downloadTextFile(`${job.company}_Letter.txt`, letterText)} className="text-purple-600">
+                        <Download className="w-4 h-4" />
                       </button>
                     </div>
                     <textarea 
                       value={letterText}
                       onChange={(e) => setLetterText(e.target.value)}
-                      className="flex-1 p-8 bg-white text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none custom-scrollbar focus:ring-1 focus:ring-purple-100"
-                      placeholder="Generating your unique cover letter..."
+                      className="flex-1 p-8 bg-white text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none"
                     />
                   </div>
                 </div>
@@ -288,20 +214,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
           </div>
         )}
       </div>
-
-      {/* FOOTER ACTIONS */}
-      {activeTab === 'ai-docs' && job.customizedResume && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 bg-slate-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-6 border border-white/10 animate-in slide-in-from-bottom-4">
-             <div className="flex items-center gap-2">
-                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                 <span className="text-[10px] font-black uppercase tracking-widest">Assets Ready</span>
-             </div>
-             <div className="w-px h-4 bg-white/10" />
-             <button onClick={handleGenerateDocuments} className="text-[10px] font-black uppercase tracking-widest hover:text-indigo-400 flex items-center gap-2 transition-colors">
-                 <RefreshCw className="w-3 h-3" /> Re-Tailor
-             </button>
-        </div>
-      )}
     </div>
   );
 };

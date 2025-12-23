@@ -13,7 +13,6 @@ const API_BASE = '/api';
 const normalizePreferences = (prefs: any): UserPreferences => {
     if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
     
-    // Support both camelCase (frontend) and snake_case (database)
     return {
         targetRoles: Array.isArray(prefs.targetRoles) ? prefs.targetRoles : 
                      Array.isArray(prefs.target_roles) ? prefs.target_roles : [],
@@ -48,39 +47,21 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // REVAMPED: Sending an ultra-explicit flat payload to resolve "cloud save failed"
-    // This handles both common ORM mappings and standard JSON serializations.
     const payload = {
         id: profile.id,
         fullName: profile.fullName,
-        full_name: profile.fullName, // Snake case fallback
+        full_name: profile.fullName,
         email: profile.email,
         phone: profile.phone,
         resumeContent: profile.resumeContent,
-        resume_content: profile.resumeContent, // Snake case fallback
+        resume_content: profile.resumeContent,
         resumeFileName: profile.resumeFileName,
-        resume_file_name: profile.resumeFileName, // Snake case fallback
+        resume_file_name: profile.resumeFileName,
         connectedAccounts: profile.connectedAccounts || [],
         connected_accounts: profile.connectedAccounts || [],
         plan: profile.plan || 'free',
-        onboardedAt: profile.onboardedAt,
-        onboarded_at: profile.onboardedAt,
-        preferences: {
-            targetRoles: profile.preferences.targetRoles,
-            target_roles: profile.preferences.targetRoles,
-            targetLocations: profile.preferences.targetLocations,
-            target_locations: profile.preferences.targetLocations,
-            minSalary: profile.preferences.minSalary,
-            min_salary: profile.preferences.minSalary,
-            remoteOnly: profile.preferences.remoteOnly,
-            remote_only: profile.preferences.remoteOnly,
-            shareUrl: profile.preferences.shareUrl,
-            share_url: profile.preferences.shareUrl,
-            language: profile.preferences.language
-        }
+        preferences: profile.preferences
     };
-
-    console.debug("[JobFlow DB Sync] Outgoing Profile Payload:", payload);
 
     try {
         const response = await fetch(`${API_BASE}/profile`, {
@@ -92,69 +73,81 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
             body: JSON.stringify(payload)
         });
         
+        if (response.status === 404) {
+            console.error("[JobFlow DB] API Endpoint /api/profile not found (404). Check deployment status.");
+            throw new Error("Cloud storage endpoint missing. Saving locally for now.");
+        }
+
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error("[JobFlow DB Sync] Server Error Response:", {
-                status: response.status,
-                body: errorBody
-            });
-            throw new Error(`Profile sync failed (${response.status}). The server returned: ${errorBody || 'Unknown Error'}`);
+            throw new Error(`Sync failed (${response.status}): ${errorBody}`);
         }
         
         const data = await response.json();
         return normalizeProfile(data);
     } catch (err: any) {
-        console.error("[JobFlow DB Sync] Network/API Exception:", err);
+        console.error("[JobFlow DB Sync] Save Exception:", err);
         throw err;
     }
 };
 
 export const getUserProfile = async (clerkToken: string): Promise<UserProfile | null> => {
-    const response = await fetch(`${API_BASE}/profile`, {
-        headers: {
-            'Authorization': `Bearer ${clerkToken}`
-        }
-    });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Failed to fetch profile from cloud');
-    const data = await response.json();
-    return normalizeProfile(data);
+    try {
+        const response = await fetch(`${API_BASE}/profile`, {
+            headers: {
+                'Authorization': `Bearer ${clerkToken}`
+            }
+        });
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error('Failed to fetch profile from cloud');
+        const data = await response.json();
+        return normalizeProfile(data);
+    } catch (e) {
+        console.warn("[JobFlow DB] Get profile failed, using local fallback.");
+        return null;
+    }
 };
 
 export const fetchJobsFromDb = async (clerkToken: string): Promise<Job[]> => {
-    const response = await fetch(`${API_BASE}/jobs`, {
-        headers: {
-            'Authorization': `Bearer ${clerkToken}`
-        }
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.jobs || [];
+    try {
+        const response = await fetch(`${API_BASE}/jobs`, {
+            headers: {
+                'Authorization': `Bearer ${clerkToken}`
+            }
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.jobs || [];
+    } catch (e) {
+        return [];
+    }
 };
 
 export const saveJobToDb = async (job: Job, clerkToken: string) => {
-    const response = await fetch(`${API_BASE}/jobs`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${clerkToken}`
-        },
-        body: JSON.stringify(job)
-    });
-    if (!response.ok) {
-        console.error('[JobFlow DB Sync] Failed to save job to cloud');
+    try {
+        await fetch(`${API_BASE}/jobs`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${clerkToken}`
+            },
+            body: JSON.stringify(job)
+        });
+    } catch (e) {
+        console.warn("[JobFlow DB] Save job failed.");
     }
 };
 
 export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
-    const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-        method: 'DELETE',
-        headers: {
-            'Authorization': `Bearer ${clerkToken}`
-        }
-    });
-    if (!response.ok) {
-        console.error('[JobFlow DB Sync] Failed to delete job from cloud');
+    try {
+        await fetch(`${API_BASE}/jobs/${jobId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${clerkToken}`
+            }
+        });
+    } catch (e) {
+        console.warn("[JobFlow DB] Delete job failed.");
     }
 };
 
