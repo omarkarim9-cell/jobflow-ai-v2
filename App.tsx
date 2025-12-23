@@ -94,7 +94,7 @@ export const App: React.FC = () => {
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
           
-          // Always ensure we start at Dashboard
+          // Force landing on dashboard regardless of profile state
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
@@ -179,7 +179,7 @@ export const App: React.FC = () => {
     );
   }
 
-  // FORCE AUTH FIRST
+  // Auth is the only gate. After this, all views are accessible.
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
@@ -325,7 +325,7 @@ export const App: React.FC = () => {
                 <div className="mb-6">
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                      Role matches found in your connected accounts
+                      New opportunities found in your connected inbox
                     </p>
                 </div>
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
@@ -345,7 +345,7 @@ export const App: React.FC = () => {
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
                         <Mail className="w-16 h-16 mb-4 opacity-10" />
-                        <p className="font-bold text-slate-600">No scanned jobs yet.</p>
+                        <p className="font-bold text-slate-600">No scanned jobs to review.</p>
                         <button 
                           onClick={() => setCurrentView(ViewState.EMAILS)}
                           className="mt-4 text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"

@@ -35,7 +35,8 @@ if (typeof window !== 'undefined') {
 const ConfigurationGuard: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     
-    const isConfigured = (CLERK_KEY?.length > 20) && (GEMINI_KEY?.length > 20);
+    // Relaxed check to ensure the app starts even with shorter development keys
+    const isConfigured = (CLERK_KEY?.length > 10) && (GEMINI_KEY?.length > 10);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
