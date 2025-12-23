@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from './types';
@@ -107,7 +106,7 @@ export const App: React.FC = () => {
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Cloud sync error. Using local version.", "error");
+          showNotification("Cloud sync error. Local fallback active.", "error");
       } finally {
           setLoading(false);
       }
@@ -122,16 +121,18 @@ export const App: React.FC = () => {
   }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
+    // Optimistic Update: UI responds instantly
     setUserProfile(updatedProfile);
     try {
         const token = await getToken();
         if (token) {
-            await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced with database.", "success");
+            const saved = await saveUserProfile(updatedProfile, token);
+            if (saved) setUserProfile(saved);
+            showNotification("Profile synced with Cloud.", "success");
         }
-    } catch (error) {
-        console.error("Cloud Save Error:", error);
-        showNotification("Cloud save failed. Preferences saved locally.", "error");
+    } catch (error: any) {
+        console.error("Sync Failure:", error);
+        showNotification(error.message || "Cloud sync failed.", "error");
     }
   };
   
@@ -145,6 +146,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateJobFull = async (updatedJob: Job) => {
+    // Immediate state update for visual verification
     setJobs(prev => prev.map(j => j.id === updatedJob.id ? updatedJob : j));
     const token = await getToken();
     if (token) await saveJobToDb(updatedJob, token);
@@ -200,32 +202,23 @@ export const App: React.FC = () => {
     }
   };
 
-  /**
-   * AI Strategy: Attempt Gemini, fall back to Local Templates if cloud fails.
-   * Sequential delays prevent rate limit errors.
-   */
   const tailorDocuments = async (job: Job) => {
       if (!userProfile?.resumeContent) throw new Error("No resume content found.");
 
       let customizedResumeContent = "";
       let coverLetterContent = "";
 
-      // 1. Resume Generation
       try {
           customizedResumeContent = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
       } catch (e) {
-          console.warn("Gemini Resume failed, falling back to local...");
           customizedResumeContent = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
       }
 
-      // DELAY to avoid "AI tailoring failed" due to rate limits
       await new Promise(r => setTimeout(r, 1500)); 
 
-      // 2. Cover Letter Generation
       try {
           coverLetterContent = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
       } catch (e) {
-          console.warn("Gemini Cover Letter failed, falling back to local...");
           coverLetterContent = await localGenerateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
       }
 
@@ -249,18 +242,14 @@ export const App: React.FC = () => {
             if (!job || job.customizedResume) continue;
             
             showNotification(`Generating docs for ${job.company}...`, 'success');
-            
             const { customizedResumeContent, coverLetterContent } = await tailorDocuments(job);
-
             const updatedJob = { ...job, customizedResume: customizedResumeContent, coverLetter: coverLetterContent, status: JobStatus.SAVED };
             setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
             if (token) await saveJobToDb(updatedJob, token);
             count++;
-            
-            // Artificial delay between jobs in bulk
             await new Promise(r => setTimeout(r, 1000));
         }
-        showNotification(`Finished Resume/Letter generation for ${count} jobs.`, "success");
+        showNotification(`Finished AI tailoring for ${count} jobs.`, "success");
     } catch (e) {
         console.error("Bulk Generation Error:", e);
         showNotification("Process interrupted.", "error");
@@ -280,19 +269,14 @@ export const App: React.FC = () => {
     
     try {
         const { customizedResumeContent, coverLetterContent } = await tailorDocuments(job);
-
         const updatedJob = { ...job, customizedResume: customizedResumeContent, coverLetter: coverLetterContent, status: JobStatus.SAVED };
-        
-        // Critical: Update state FIRST to ensure visibility
         setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
-        
         const token = await getToken();
         if (token) await saveJobToDb(updatedJob, token);
-        
-        showNotification("Resume/Letter tailored successfully.", "success");
+        showNotification("Tailoring complete. Assets ready for review.", "success");
     } catch (e) {
         console.error("AI Generation Error:", e);
-        showNotification("AI tailoring failed. Please check your network.", "error");
+        showNotification("AI tailoring failed. Check network status.", "error");
     }
   };
 
@@ -396,7 +380,7 @@ export const App: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold">Complete your profile</h4>
-                    <p className="text-xs text-indigo-100">Upload your resume to enable AI document generation.</p>
+                    <p className="text-xs text-indigo-100">Upload your resume to enable AI tailored assets.</p>
                   </div>
                 </div>
                 <button 
@@ -446,7 +430,7 @@ export const App: React.FC = () => {
                         </div>
                         <button onClick={handleBulkGenerateDocs} disabled={isBulkProcessing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
                             {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                            Resume/Letter Generation
+                            Bulk Tailor Assets
                         </button>
                         <button onClick={() => setCheckedJobIds(new Set())} className="p-2 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
                     </div>
@@ -461,7 +445,7 @@ export const App: React.FC = () => {
         {currentView === ViewState.SUPPORT && <Support />}
         {currentView === ViewState.MANUAL && <UserManual userProfile={userProfile!} />}
 
-        {/* Job Detail Overlay - High visibility for tailored assets */}
+        {/* Job Detail Overlay */}
         {selectedJobId && currentSelectedJob && (
             <div className="absolute inset-0 z-50 bg-slate-50 overflow-hidden flex flex-col animate-in slide-in-from-right duration-300">
                 <div className="p-4 bg-white border-b border-slate-200 flex items-center gap-4">
@@ -473,7 +457,6 @@ export const App: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    {/* Added missing onClose prop to fix the TypeScript error */}
                     <JobDetail 
                         job={currentSelectedJob} 
                         userProfile={userProfile!} 

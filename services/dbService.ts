@@ -7,8 +7,8 @@ import { Job, UserProfile, UserPreferences } from '../types';
 const API_BASE = '/api';
 
 /**
- * Normalizes user preferences specifically to ensure targetRoles and other arrays 
- * are correctly mapped regardless of database naming convention.
+ * Normalizes user preferences to ensure all potential database naming conventions
+ * are correctly mapped to the frontend interface.
  */
 const normalizePreferences = (prefs: any): UserPreferences => {
     if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
@@ -48,21 +48,23 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // Explicitly mapping all fields to ensure the backend receives what it expects.
-    // We send both camelCase and snake_case top-level fields for maximum compatibility.
+    // REVAMPED: Sending an ultra-explicit flat payload to resolve "cloud save failed"
+    // This handles both common ORM mappings and standard JSON serializations.
     const payload = {
         id: profile.id,
         fullName: profile.fullName,
-        full_name: profile.fullName,
+        full_name: profile.fullName, // Snake case fallback
         email: profile.email,
         phone: profile.phone,
         resumeContent: profile.resumeContent,
-        resume_content: profile.resumeContent,
+        resume_content: profile.resumeContent, // Snake case fallback
         resumeFileName: profile.resumeFileName,
-        resume_file_name: profile.resumeFileName,
+        resume_file_name: profile.resumeFileName, // Snake case fallback
+        connectedAccounts: profile.connectedAccounts || [],
         connected_accounts: profile.connectedAccounts || [],
         plan: profile.plan || 'free',
-        // Preferences is a nested object often stored as JSONB in Neon
+        onboardedAt: profile.onboardedAt,
+        onboarded_at: profile.onboardedAt,
         preferences: {
             targetRoles: profile.preferences.targetRoles,
             target_roles: profile.preferences.targetRoles,
@@ -78,7 +80,7 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
         }
     };
 
-    console.debug("[JobFlow DB] Saving Profile Payload:", payload);
+    console.debug("[JobFlow DB Sync] Outgoing Profile Payload:", payload);
 
     try {
         const response = await fetch(`${API_BASE}/profile`, {
@@ -91,15 +93,18 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
         });
         
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error("[JobFlow DB] Server Error Response:", errorText);
-            throw new Error(`Cloud save failed (${response.status}). If the error persists, please contact support.`);
+            const errorBody = await response.text();
+            console.error("[JobFlow DB Sync] Server Error Response:", {
+                status: response.status,
+                body: errorBody
+            });
+            throw new Error(`Profile sync failed (${response.status}). The server returned: ${errorBody || 'Unknown Error'}`);
         }
         
         const data = await response.json();
         return normalizeProfile(data);
     } catch (err: any) {
-        console.error("[JobFlow DB] Connection Exception:", err);
+        console.error("[JobFlow DB Sync] Network/API Exception:", err);
         throw err;
     }
 };
@@ -137,7 +142,7 @@ export const saveJobToDb = async (job: Job, clerkToken: string) => {
         body: JSON.stringify(job)
     });
     if (!response.ok) {
-        console.error('Failed to save job to cloud');
+        console.error('[JobFlow DB Sync] Failed to save job to cloud');
     }
 };
 
@@ -149,7 +154,7 @@ export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
         }
     });
     if (!response.ok) {
-        console.error('Failed to delete job from cloud');
+        console.error('[JobFlow DB Sync] Failed to delete job from cloud');
     }
 };
 
