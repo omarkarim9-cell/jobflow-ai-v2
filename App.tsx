@@ -94,11 +94,11 @@ export const App: React.FC = () => {
           const storedPath = localStorage.getItem('jobflow_project_path');
           if (storedPath) setDirHandle(createVirtualDirectory(storedPath));
           
-          // Force landing on dashboard regardless of profile state
+          // Land on Dashboard
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Failed to synchronize cloud data.", "error");
+          showNotification("Cloud sync failed.", "error");
       } finally {
           setLoading(false);
       }
@@ -118,10 +118,10 @@ export const App: React.FC = () => {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile updated successfully.", "success");
+            showNotification("Profile updated.", "success");
         }
     } catch (error) {
-        showNotification("Cloud sync failed. Data saved locally.", "error");
+        showNotification("Local save successful. Cloud sync pending.", "error");
     }
   };
   
@@ -144,7 +144,7 @@ export const App: React.FC = () => {
     getToken().then(token => {
         if (token) newJobs.forEach(job => saveJobToDb(job, token));
     });
-    showNotification(`Added ${newJobs.length} new job leads.`, 'success');
+    showNotification(`Imported ${newJobs.length} jobs.`, 'success');
   };
 
   const handleAddManualJob = async (job: Job) => {
@@ -159,7 +159,7 @@ export const App: React.FC = () => {
       setJobs(prev => prev.filter(j => j.id !== id));
       const token = await getToken();
       if (token) await deleteJobFromDb(id, token);
-      showNotification("Job record removed.", 'success');
+      showNotification("Job removed.", 'success');
   };
 
   const handleToggleCheck = (id: string) => {
@@ -169,8 +169,6 @@ export const App: React.FC = () => {
     setCheckedJobIds(newChecked);
   };
 
-  // --- RENDERING LOGIC ---
-
   if (!isLoaded || loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -179,7 +177,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // Auth is the only gate. After this, all views are accessible.
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
@@ -194,14 +191,13 @@ export const App: React.FC = () => {
         <NotificationToast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />
       )}
 
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-e border-slate-200 flex flex-col shrink-0 z-20 shadow-sm">
+      <aside className="w-64 bg-white border-e border-slate-200 flex flex-col shrink-0 z-20">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-100">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                <Briefcase className="text-white w-5 h-5" />
             </div>
-            <span className="font-bold text-xl text-slate-900 tracking-tight">JobFlow</span>
+            <span className="font-bold text-xl text-slate-900">JobFlow</span>
           </div>
           <UserButton afterSignOutUrl="/" />
         </div>
@@ -221,11 +217,7 @@ export const App: React.FC = () => {
           >
             <SearchIcon className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Scanned Jobs</span>
-            {detectedJobsCount > 0 && (
-              <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                {detectedJobsCount}
-              </span>
-            )}
+            {detectedJobsCount > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">{detectedJobsCount}</span>}
           </button>
 
           <button 
@@ -234,11 +226,7 @@ export const App: React.FC = () => {
           >
             <List className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Applications</span>
-            {trackedJobsCount > 0 && (
-              <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                {trackedJobsCount}
-              </span>
-            )}
+            {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
           </button>
           
           <button 
@@ -251,26 +239,17 @@ export const App: React.FC = () => {
 
           <div className="my-2 border-t border-slate-100" />
 
-          <button 
-            onClick={() => setCurrentView(ViewState.SUBSCRIPTION)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUBSCRIPTION ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SUBSCRIPTION)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUBSCRIPTION ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <CreditCard className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Subscription</span>
           </button>
 
-          <button 
-            onClick={() => setCurrentView(ViewState.SUPPORT)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUPPORT ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SUPPORT)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SUPPORT ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <LifeBuoy className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Support</span>
           </button>
 
-          <button 
-            onClick={() => setCurrentView(ViewState.MANUAL)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.MANUAL ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.MANUAL)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.MANUAL ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <BookOpen className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Help Guide</span>
           </button>
@@ -292,11 +271,9 @@ export const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-hidden relative">
         {currentView === ViewState.DASHBOARD && (
           <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-            {/* Non-blocking Onboarding Prompt */}
             {isProfileEmpty && (
               <div className="mb-8 p-4 bg-indigo-600 rounded-2xl flex items-center justify-between shadow-xl shadow-indigo-100 text-white">
                 <div className="flex items-center gap-4">
@@ -304,8 +281,8 @@ export const App: React.FC = () => {
                     <AlertCircle className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h4 className="font-bold">Complete your profile to unlock AI power</h4>
-                    <p className="text-xs text-indigo-100">AI needs your resume to customize applications and generate cover letters.</p>
+                    <h4 className="font-bold">Complete your profile</h4>
+                    <p className="text-xs text-indigo-100">Upload a resume to unlock AI tailoring features.</p>
                   </div>
                 </div>
                 <button 
@@ -322,88 +299,27 @@ export const App: React.FC = () => {
         
         {currentView === ViewState.SELECTED_JOBS && (
             <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                      New opportunities found in your connected inbox
-                    </p>
-                </div>
+                <div className="mb-6"><h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1></div>
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
-                            <JobCard 
-                              key={job.id} 
-                              job={job} 
-                              onClick={(j) => setSelectedJobId(j.id)} 
-                              isSelected={selectedJobId === job.id} 
-                              isChecked={checkedJobIds.has(job.id)} 
-                              onToggleCheck={handleToggleCheck} 
-                              onAutoApply={() => {}} 
-                            />
+                            <JobCard key={job.id} job={job} onClick={(j) => setSelectedJobId(j.id)} isSelected={selectedJobId === job.id} isChecked={checkedJobIds.has(job.id)} onToggleCheck={handleToggleCheck} onAutoApply={() => {}} />
                         ))}
                     </div>
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
-                        <Mail className="w-16 h-16 mb-4 opacity-10" />
-                        <p className="font-bold text-slate-600">No scanned jobs to review.</p>
-                        <button 
-                          onClick={() => setCurrentView(ViewState.EMAILS)}
-                          className="mt-4 text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"
-                        >
-                          Run Inbox Scanner
-                        </button>
+                        <Mail className="w-16 h-16 mb-4 opacity-10" /><p className="font-bold text-slate-600">No scanned jobs to review.</p>
                     </div>
                 )}
             </div>
         )}
 
-        {currentView === ViewState.TRACKER && (
-          <ApplicationTracker 
-            jobs={jobs} 
-            onUpdateStatus={handleJobUpdate} 
-            onDelete={handleDeleteJob} 
-            onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} 
-          />
-        )}
-
-        {currentView === ViewState.SETTINGS && (
-          <div className="h-full p-8 overflow-y-auto animate-in fade-in">
-            <Settings 
-              userProfile={userProfile!} 
-              onUpdate={handleUpdateProfile} 
-              dirHandle={dirHandle} 
-              onDirHandleChange={setDirHandle} 
-              jobs={jobs} 
-              showNotification={showNotification} 
-              onReset={() => signOut()} 
-            />
-          </div>
-        )}
-
-        {currentView === ViewState.EMAILS && (
-          <div className="h-full p-6 animate-in fade-in">
-            <InboxScanner 
-              onImport={handleAddJobs} 
-              sessionAccount={sessionAccount} 
-              onConnectSession={setSessionAccount} 
-              onDisconnectSession={() => setSessionAccount(null)} 
-              showNotification={showNotification} 
-              userPreferences={userProfile?.preferences} 
-            />
-          </div>
-        )}
-
-        {currentView === ViewState.SUBSCRIPTION && (
-          <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />
-        )}
-
-        {currentView === ViewState.SUPPORT && (
-          <Support />
-        )}
-
-        {currentView === ViewState.MANUAL && (
-          <UserManual userProfile={userProfile!} />
-        )}
+        {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
+        {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto animate-in fade-in"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
+        {currentView === ViewState.EMAILS && <div className="h-full p-6 animate-in fade-in"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
+        {currentView === ViewState.SUBSCRIPTION && <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />}
+        {currentView === ViewState.SUPPORT && <Support />}
+        {currentView === ViewState.MANUAL && <UserManual userProfile={userProfile!} />}
       </main>
 
       <AddJobModal isOpen={isAddJobModalOpen} onClose={() => setIsAddJobModalOpen(false)} onAdd={handleAddManualJob} />
