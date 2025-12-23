@@ -50,14 +50,20 @@ const normalizeProfile = (data: any): UserProfile | null => {
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
     // Construct a safe, flat payload that matches common DB naming conventions
     const payload = {
-        ...profile,
-        // Ensure both versions are sent for maximum compatibility with serverless handlers
+        id: profile.id,
+        fullName: profile.fullName,
         full_name: profile.fullName,
+        email: profile.email,
+        phone: profile.phone,
+        resumeContent: profile.resumeContent,
         resume_content: profile.resumeContent,
+        resumeFileName: profile.resumeFileName,
         resume_file_name: profile.resumeFileName,
         connected_accounts: profile.connectedAccounts,
+        plan: profile.plan,
         preferences: {
             ...profile.preferences,
+            // Mirror camelCase to snake_case for backend compatibility
             target_roles: profile.preferences.targetRoles,
             target_locations: profile.preferences.targetLocations,
             min_salary: profile.preferences.minSalary,
@@ -98,7 +104,7 @@ export const getUserProfile = async (clerkToken: string): Promise<UserProfile | 
         }
     });
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Failed to fetch profile');
+    if (!response.ok) throw new Error('Failed to fetch profile from cloud');
     const data = await response.json();
     return normalizeProfile(data);
 };
