@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { Job, JobStatus, UserProfile, isSubscriptionValid } from '../types';
+import { Job, JobStatus, UserProfile } from '../types';
 import { generateCoverLetter, customizeResume } from '../services/geminiService';
 import { localGenerateCoverLetter, localCustomizeResume } from '../services/localAiService';
-import { simulateBrowserAutomation, openSafeApplicationUrl } from '../services/automationService';
-import { Wand2, FileText, CheckCircle, ExternalLink, Loader2, AlertTriangle, Clock, StickyNote, Pencil, Send, Search, RefreshCw, Sparkles, Check, Settings, Download, ArrowRight } from 'lucide-react';
+import { Wand2, FileText, Loader2, RefreshCw, Sparkles, Download, X, Send, ExternalLink } from 'lucide-react';
 import { NotificationType } from './NotificationToast';
 
 interface JobDetailProps {
@@ -11,167 +11,80 @@ interface JobDetailProps {
   userProfile: UserProfile;
   onUpdateStatus: (id: string, status: JobStatus) => void;
   onUpdateJob: (job: Job) => void;
-  dirHandle?: any;
-  triggerAutoApply?: boolean;
-  onAutoApplyHandled?: () => void;
-  onOpenSettings?: () => void;
+  onClose: () => void;
   showNotification?: (msg: string, type: NotificationType) => void;
 }
 
-export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdateStatus, onUpdateJob, dirHandle, triggerAutoApply, onAutoApplyHandled, onOpenSettings, showNotification }) => {
+export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdateJob, onClose, showNotification }) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [showApplyLater, setShowApplyLater] = useState(false);
-  const [showManualFallback, setShowManualFallback] = useState(false); 
-  const [laterNotes, setLaterNotes] = useState('');
-  const [applyStep, setApplyStep] = useState<string>('');
-  const [applySuccess, setApplySuccess] = useState(false);
-  
-  // Link Discovery State
-  const [isFindingLink, setIsFindingLink] = useState(false);
-  
-  // Local state for editing
-  const [generatedLetter, setGeneratedLetter] = useState<string | null>(job.coverLetter || null);
-  const [resumeText, setResumeText] = useState<string>(job.customizedResume || userProfile.resumeContent);
-  const [notesText, setNotesText] = useState<string>(job.notes || '');
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
-  
   const [activeTab, setActiveTab] = useState<'details' | 'ai-docs'>('details');
-  const [isSaved, setIsSaved] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  
+  // Local state for live preview/editing of generated text
+  const [resumeText, setResumeText] = useState<string>(job.customizedResume || userProfile.resumeContent || '');
+  const [letterText, setLetterText] = useState<string>(job.coverLetter || '');
 
   const notify = (msg: string, type: NotificationType) => {
       if (showNotification) showNotification(msg, type);
-      else console.log(`[${type}] ${msg}`);
   };
 
-  // --- ACTIONS & LOGIC ---
+  // Keep local state in sync with job object updates
+  useEffect(() => {
+      setResumeText(job.customizedResume || userProfile.resumeContent || '');
+      setLetterText(job.coverLetter || '');
+      
+      // Auto-switch to docs if they were just generated
+      if (job.customizedResume && activeTab === 'details') {
+          setActiveTab('ai-docs');
+      }
+  }, [job, userProfile.resumeContent]);
 
-  const handleGenerateCoverLetter = async () => {
-    if (!userProfile.resumeContent || userProfile.resumeContent.trim().length < 10) {
-        alert("Please upload your Master Resume in Settings first.");
-        return;
-    }
-    setIsGenerating(true);
-    try {
-        let letter = "";
-        try {
-            letter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
-        } catch (e) {
-            letter = await localGenerateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
-        }
-        setGeneratedLetter(letter);
-    } catch (e) {
-        console.error(e);
-        notify("Generation failed.", 'error');
-    } finally {
-        setIsGenerating(false);
-    }
-  };
-
-  const handleRegenerateResume = async () => {
-    if (!userProfile.resumeContent || userProfile.resumeContent.trim().length < 10) {
-        alert("Your Master Resume is missing. Please check Settings.");
+  const handleGenerateDocuments = async () => {
+    if (!userProfile.resumeContent || userProfile.resumeContent.length < 20) {
+        notify("Please upload a resume in Settings first.", "error");
         return;
     }
 
     setIsGenerating(true);
-    try {
-        let newResume = "";
-        try {
-            newResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-        } catch (e) {
-            newResume = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-        }
-        setResumeText(newResume);
-        onUpdateJob({
-            ...job,
-            customizedResume: newResume
-        });
-    } catch (e) {
-        console.error(e);
-        notify("Tailoring failed.", 'error');
-    } finally {
-        setIsGenerating(false);
-    }
-  };
-
-  const executeAutoApply = async () => {
-    if (!userProfile.resumeContent || userProfile.resumeContent.trim().length < 10) {
-        setShowConfirm(false);
-        setActiveTab('ai-docs'); 
-        return;
-    }
-
-    setShowConfirm(false);
-    setIsApplying(true);
-    setApplyStep('Analyzing Job Description...');
+    notify(`Tailoring assets for ${job.company}...`, 'success');
     
-    let currentResume = resumeText;
-    let currentLetter = generatedLetter;
-
     try {
-        if (!job.customizedResume) {
-            setApplyStep('Tailoring Resume...');
-            try {
-                currentResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-            } catch (e) {
-                currentResume = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-            }
-            setResumeText(currentResume);
-            await new Promise(r => setTimeout(r, 500));
-        }
-
-        if (!job.coverLetter) {
-            setApplyStep('Drafting Cover Letter...');
-            try {
-                currentLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
-            } catch (e) {
-                currentLetter = await localGenerateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
-            }
-            setGeneratedLetter(currentLetter);
-            await new Promise(r => setTimeout(r, 500));
+        // Sequential calls with delay to ensure Gemini processing
+        let finalResume = "";
+        try {
+            finalResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+        } catch (e) {
+            finalResume = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
         }
         
-        onUpdateJob({
-            ...job,
-            customizedResume: currentResume,
-            coverLetter: currentLetter || undefined,
-            status: JobStatus.SAVED
-        });
+        await new Promise(r => setTimeout(r, 1200));
 
-        setApplyStep('Ready for application.');
-        setShowManualFallback(true);
+        let finalLetter = "";
+        try {
+            finalLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+        } catch (e) {
+            finalLetter = await localGenerateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+        }
 
-    } catch (error) {
-        console.error("Process failed", error);
-        notify("Generation interrupted.", 'error');
+        const updatedJob: Job = { 
+            ...job, 
+            customizedResume: finalResume, 
+            coverLetter: finalLetter, 
+            status: JobStatus.SAVED 
+        };
+        
+        onUpdateJob(updatedJob);
+        notify("Resume and Cover Letter generated.", "success");
+        setActiveTab('ai-docs');
+    } catch (e) {
+        console.error("AI Generation Error:", e);
+        notify("Tailoring failed. Please retry in a few seconds.", "error");
     } finally {
-        setIsApplying(false);
+        setIsGenerating(false);
     }
   };
 
-  // --- EFFECTS ---
-
-  useEffect(() => {
-    setGeneratedLetter(job.coverLetter || null);
-    setResumeText(job.customizedResume || userProfile.resumeContent || "");
-    setNotesText(job.notes || '');
-    setIsApplying(false); 
-    setShowManualFallback(false);
-  }, [job, userProfile]);
-
-  useEffect(() => {
-    if (triggerAutoApply) {
-        executeAutoApply();
-        if (onAutoApplyHandled) onAutoApplyHandled();
-    }
-  }, [triggerAutoApply]);
-
-  // --- DOWNLOAD HELPERS ---
-
   const downloadTextFile = (filename: string, content: string) => {
+      if (!content) return;
       const blob = new Blob([content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -183,101 +96,130 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
       URL.revokeObjectURL(url);
   };
 
-  const hasMasterResume = userProfile.resumeContent && userProfile.resumeContent.trim().length > 10;
-  
+  // Added the missing return statement to fix line 18 error
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm h-full flex flex-col overflow-hidden relative">
-      {/* Header */}
-      <div className="p-6 border-b border-slate-100">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-               <h2 className="text-2xl font-bold text-slate-900">{job.title}</h2>
-               {job.applicationUrl && (
-                 <button onClick={(e) => openSafeApplicationUrl(job)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm">
-                   <Send className="w-4 h-4" /> Apply
-                 </button>
-               )}
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex border-b border-slate-100">
+        <button 
+          onClick={() => setActiveTab('details')}
+          className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'details' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          Job Details
+        </button>
+        <button 
+          onClick={() => setActiveTab('ai-docs')}
+          className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'ai-docs' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          AI Assets
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-8">
+        {activeTab === 'details' ? (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-6">
+                <div className="w-20 h-20 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300 text-4xl font-black">
+                  {job.company.charAt(0)}
+                </div>
+                <div>
+                  <h1 className="text-3xl font-black text-slate-900 tracking-tight">{job.title}</h1>
+                  <p className="text-lg font-bold text-indigo-600 mt-1">{job.company}</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={handleGenerateDocuments}
+                  disabled={isGenerating}
+                  className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-xl shadow-indigo-100"
+                >
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  AI Tailoring
+                </button>
+              </div>
             </div>
-            <div className="text-lg text-slate-600 font-medium">{job.company}</div>
-          </div>
-          
-          <div className="flex gap-2">
-            <button onClick={() => setShowApplyLater(true)} disabled={isApplying} className="px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center">
-              <Clock className="w-4 h-4 me-2" /> Save for Later
-            </button>
-            <button onClick={() => setShowConfirm(true)} disabled={isApplying} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg flex items-center shadow-sm">
-               {isApplying ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <Sparkles className="w-4 h-4 me-2" />}
-               Resume/Letter Generation
-            </button>
-          </div>
-        </div>
 
-        <div className="flex border-b border-slate-200 mt-6">
-            <button onClick={() => setActiveTab('details')} className={`pb-3 px-4 text-sm font-medium border-b-2 ${activeTab === 'details' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>Job Details</button>
-            <button onClick={() => setActiveTab('ai-docs')} className={`pb-3 px-4 text-sm font-medium border-b-2 ${activeTab === 'ai-docs' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>AI Documents</button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-          {activeTab === 'details' && (
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">Description</h3>
-                  <div className="prose prose-sm max-w-none text-slate-600 whitespace-pre-wrap leading-relaxed">{job.description}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Match Score</p>
+                <p className={`text-2xl font-black ${job.matchScore > 80 ? 'text-emerald-600' : 'text-amber-600'}`}>{job.matchScore}%</p>
               </div>
-          )}
-
-          {activeTab === 'ai-docs' && (
-              <div className="space-y-6">
-                  {/* Tailored Resume */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                       <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                           <h3 className="font-bold text-slate-900 flex items-center"><FileText className="w-4 h-4 me-2 text-indigo-600"/> Tailored Resume</h3>
-                           <div className="flex gap-2">
-                               <button onClick={handleRegenerateResume} disabled={isGenerating} className="text-xs flex items-center text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-                                   <RefreshCw className={`w-3 h-3 me-1 ${isGenerating ? 'animate-spin' : ''}`} /> Regenerate
-                               </button>
-                               <button onClick={() => downloadTextFile(`${job.company}_Resume.txt`, resumeText)} className="text-xs flex items-center text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-                                   <Download className="w-3 h-3 me-1" /> Download
-                               </button>
-                           </div>
-                       </div>
-                       <textarea value={resumeText} onChange={(e) => setResumeText(e.target.value)} className="w-full h-80 p-4 text-sm font-mono text-slate-700 bg-white outline-none resize-none leading-relaxed" />
-                  </div>
-
-                  {/* Cover Letter */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                       <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                           <h3 className="font-bold text-slate-900 flex items-center"><StickyNote className="w-4 h-4 me-2 text-indigo-600"/> Cover Letter</h3>
-                           <div className="flex gap-2">
-                               <button onClick={handleGenerateCoverLetter} disabled={isGenerating} className="text-xs flex items-center text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-                                   <Wand2 className="w-3 h-3 me-1" /> {generatedLetter ? 'Rewrite' : 'Generate'}
-                               </button>
-                               {generatedLetter && (
-                                   <button onClick={() => downloadTextFile(`${job.company}_Letter.txt`, generatedLetter)} className="text-xs flex items-center text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-                                       <Download className="w-3 h-3 me-1" /> Download
-                                   </button>
-                               )}
-                           </div>
-                       </div>
-                       <textarea value={generatedLetter || ''} onChange={(e) => setGeneratedLetter(e.target.value)} placeholder="Click Generate to draft your letter..." className="w-full h-64 p-4 text-sm text-slate-700 bg-white outline-none resize-none leading-relaxed" />
-                  </div>
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Location</p>
+                <p className="text-sm font-bold text-slate-700">{job.location}</p>
               </div>
-          )}
-      </div>
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                <p className="text-sm font-bold text-slate-700">{job.status}</p>
+              </div>
+            </div>
 
-      {showConfirm && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-             <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
-                 <h3 className="text-lg font-bold text-slate-900 mb-2">Tailor Documents?</h3>
-                 <p className="text-sm text-slate-600 mb-4">Generate personalized assets for <strong>{job.company}</strong>.</p>
-                 <div className="flex gap-3">
-                     <button onClick={() => setShowConfirm(false)} className="flex-1 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancel</button>
-                     <button onClick={executeAutoApply} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Start Generation</button>
-                 </div>
-             </div>
-        </div>
-      )}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Description</h3>
+              <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100">
+                {job.description}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col animate-in fade-in duration-300">
+            {!job.customizedResume ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
+                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mb-6">
+                  <Wand2 className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-2">No AI Assets Yet</h3>
+                <p className="text-sm text-slate-500 max-w-xs mb-8">Generate a tailored resume and cover letter for this specific role in one click.</p>
+                <button 
+                  onClick={handleGenerateDocuments}
+                  disabled={isGenerating}
+                  className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-3 shadow-2xl shadow-indigo-200"
+                >
+                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                  Generate Assets Now
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+                <div className="flex flex-col h-full bg-slate-50 rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="p-6 bg-white border-b border-slate-100 flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tailored Resume</h4>
+                    <button 
+                      onClick={() => downloadTextFile(`${job.company}_Resume.txt`, resumeText)}
+                      className="p-2 hover:bg-slate-50 rounded-xl text-indigo-600 transition-all"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <textarea 
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
+                    className="flex-1 p-8 bg-transparent text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none"
+                  />
+                </div>
+                <div className="flex flex-col h-full bg-slate-50 rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="p-6 bg-white border-b border-slate-100 flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Custom Cover Letter</h4>
+                    <button 
+                      onClick={() => downloadTextFile(`${job.company}_CoverLetter.txt`, letterText)}
+                      className="p-2 hover:bg-slate-50 rounded-xl text-purple-600 transition-all"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <textarea 
+                    value={letterText}
+                    onChange={(e) => setLetterText(e.target.value)}
+                    className="flex-1 p-8 bg-transparent text-[11px] font-mono text-slate-600 leading-relaxed outline-none resize-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

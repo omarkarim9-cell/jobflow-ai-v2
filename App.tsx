@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from './types';
@@ -472,11 +473,13 @@ export const App: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden">
+                    {/* Added missing onClose prop to fix the TypeScript error */}
                     <JobDetail 
                         job={currentSelectedJob} 
                         userProfile={userProfile!} 
                         onUpdateStatus={handleJobUpdate} 
                         onUpdateJob={handleUpdateJobFull}
+                        onClose={() => setSelectedJobId(null)}
                         showNotification={showNotification}
                     />
                 </div>

@@ -48,7 +48,8 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // Construct a safe, flat payload that matches common DB naming conventions
+    // Explicitly mapping all fields to ensure the backend receives what it expects.
+    // We send both camelCase and snake_case top-level fields for maximum compatibility.
     const payload = {
         id: profile.id,
         fullName: profile.fullName,
@@ -59,19 +60,25 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
         resume_content: profile.resumeContent,
         resumeFileName: profile.resumeFileName,
         resume_file_name: profile.resumeFileName,
-        connected_accounts: profile.connectedAccounts,
-        plan: profile.plan,
+        connected_accounts: profile.connectedAccounts || [],
+        plan: profile.plan || 'free',
+        // Preferences is a nested object often stored as JSONB in Neon
         preferences: {
-            ...profile.preferences,
-            // Mirror camelCase to snake_case for backend compatibility
+            targetRoles: profile.preferences.targetRoles,
             target_roles: profile.preferences.targetRoles,
+            targetLocations: profile.preferences.targetLocations,
             target_locations: profile.preferences.targetLocations,
+            minSalary: profile.preferences.minSalary,
             min_salary: profile.preferences.minSalary,
+            remoteOnly: profile.preferences.remoteOnly,
             remote_only: profile.preferences.remoteOnly,
+            shareUrl: profile.preferences.shareUrl,
             share_url: profile.preferences.shareUrl,
             language: profile.preferences.language
         }
     };
+
+    console.debug("[JobFlow DB] Saving Profile Payload:", payload);
 
     try {
         const response = await fetch(`${API_BASE}/profile`, {
@@ -84,15 +91,15 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
         });
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error("DB Save Failed Error Data:", errorData);
-            throw new Error(errorData.message || `Server responded with ${response.status}`);
+            const errorText = await response.text();
+            console.error("[JobFlow DB] Server Error Response:", errorText);
+            throw new Error(`Cloud save failed (${response.status}). If the error persists, please contact support.`);
         }
         
         const data = await response.json();
         return normalizeProfile(data);
-    } catch (err) {
-        console.error("Fetch Exception in saveUserProfile:", err);
+    } catch (err: any) {
+        console.error("[JobFlow DB] Connection Exception:", err);
         throw err;
     }
 };
