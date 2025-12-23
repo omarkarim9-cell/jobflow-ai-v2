@@ -12,9 +12,13 @@ const API_BASE = '/api';
  */
 const normalizePreferences = (prefs: any): UserPreferences => {
     if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
+    
+    // Support both camelCase (frontend) and snake_case (database)
     return {
-        targetRoles: prefs.targetRoles || prefs.target_roles || [],
-        targetLocations: prefs.targetLocations || prefs.target_locations || [],
+        targetRoles: Array.isArray(prefs.targetRoles) ? prefs.targetRoles : 
+                     Array.isArray(prefs.target_roles) ? prefs.target_roles : [],
+        targetLocations: Array.isArray(prefs.targetLocations) ? prefs.targetLocations : 
+                         Array.isArray(prefs.target_locations) ? prefs.target_locations : [],
         minSalary: prefs.minSalary || prefs.min_salary || '',
         remoteOnly: !!(prefs.remoteOnly ?? prefs.remote_only ?? false),
         shareUrl: prefs.shareUrl || prefs.share_url,
@@ -24,7 +28,6 @@ const normalizePreferences = (prefs: any): UserPreferences => {
 
 /**
  * Normalizes user profile data from database response to frontend interface.
- * Handles both snake_case (DB) and camelCase (Frontend) for robustness.
  */
 const normalizeProfile = (data: any): UserProfile | null => {
     if (!data) return null;
@@ -45,10 +48,10 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // Explicitly format for the backend to ensure no missing fields or mismatches
+    // Construct a safe, flat payload that matches common DB naming conventions
     const payload = {
         ...profile,
-        // Backend compatibility mappings (Dual mapping for safety)
+        // Ensure both versions are sent for maximum compatibility with serverless handlers
         full_name: profile.fullName,
         resume_content: profile.resumeContent,
         resume_file_name: profile.resumeFileName,
@@ -59,27 +62,33 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
             target_locations: profile.preferences.targetLocations,
             min_salary: profile.preferences.minSalary,
             remote_only: profile.preferences.remoteOnly,
-            share_url: profile.preferences.shareUrl
+            share_url: profile.preferences.shareUrl,
+            language: profile.preferences.language
         }
     };
 
-    const response = await fetch(`${API_BASE}/profile`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${clerkToken}`
-        },
-        body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Cloud Save Failed:", errorData);
-        throw new Error(errorData.message || 'Failed to save profile to Neon database');
+    try {
+        const response = await fetch(`${API_BASE}/profile`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${clerkToken}`
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("DB Save Failed Error Data:", errorData);
+            throw new Error(errorData.message || `Server responded with ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return normalizeProfile(data);
+    } catch (err) {
+        console.error("Fetch Exception in saveUserProfile:", err);
+        throw err;
     }
-    
-    const data = await response.json();
-    return normalizeProfile(data);
 };
 
 export const getUserProfile = async (clerkToken: string): Promise<UserProfile | null> => {
@@ -89,7 +98,7 @@ export const getUserProfile = async (clerkToken: string): Promise<UserProfile | 
         }
     });
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Failed to fetch profile from cloud storage');
+    if (!response.ok) throw new Error('Failed to fetch profile');
     const data = await response.json();
     return normalizeProfile(data);
 };

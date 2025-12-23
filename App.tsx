@@ -15,6 +15,7 @@ import { NotificationToast, NotificationType } from './components/NotificationTo
 import { createVirtualDirectory } from './services/fileSystemService';
 import { LanguageCode } from './services/localization';
 import { customizeResume, generateCoverLetter } from './services/geminiService';
+import { localCustomizeResume, localGenerateCoverLetter } from './services/localAiService';
 import { 
   fetchJobsFromDb, 
   getUserProfile, 
@@ -103,7 +104,7 @@ export const App: React.FC = () => {
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Cloud connection error. Using local session.", "error");
+          showNotification("Cloud connection error. Sync disabled.", "error");
       } finally {
           setLoading(false);
       }
@@ -118,16 +119,17 @@ export const App: React.FC = () => {
   }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
+    // Optimistic Update
     setUserProfile(updatedProfile);
     try {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced with Neon DB.", "success");
+            showNotification("Profile synced with database.", "success");
         }
     } catch (error) {
         console.error("Cloud Save Error:", error);
-        showNotification("Cloud save failed. Changes kept locally.", "error");
+        showNotification("Cloud save failed. Preferences saved locally.", "error");
     }
   };
   
@@ -176,7 +178,7 @@ export const App: React.FC = () => {
   };
 
   const handleClearScannedJobs = async () => {
-    if (window.confirm("This will clear ALL current scanned job leads. Application history will be kept. Proceed?")) {
+    if (window.confirm("Clear all scanned leads? This won't affect saved applications.")) {
         const detectedIds = jobs.filter(j => j.status === JobStatus.DETECTED).map(j => j.id);
         setJobs(prev => prev.filter(j => j.status !== JobStatus.DETECTED));
         const token = await getToken();
@@ -190,31 +192,39 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleBulkDeselect = () => {
-      setCheckedJobIds(new Set());
-      showNotification("Selection cleared.", "success");
-  };
-
   /**
-   * Helper to perform AI actions with built-in retries for higher reliability.
+   * AI Strategy: Attempt Gemini, fall back to Local Templates if cloud fails.
    */
-  const callAiWithRetry = async <T,>(fn: () => Promise<T>, retries = 2): Promise<T> => {
-      let lastError;
-      for (let i = 0; i <= retries; i++) {
-          try {
-              return await fn();
-          } catch (e) {
-              lastError = e;
-              console.warn(`AI attempt ${i + 1} failed, retrying...`, e);
-              if (i < retries) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-          }
+  const tailorDocuments = async (job: Job) => {
+      if (!userProfile?.resumeContent) throw new Error("No resume content found.");
+
+      let customizedResumeContent = "";
+      let coverLetterContent = "";
+
+      // Try Gemini Resume
+      try {
+          customizedResumeContent = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+      } catch (e) {
+          console.warn("Gemini Resume failed, falling back to local...");
+          customizedResumeContent = await localCustomizeResume(job.title, job.company, job.description, userProfile.resumeContent);
       }
-      throw lastError;
+
+      await new Promise(r => setTimeout(r, 800)); // Rate limit buffer
+
+      // Try Gemini Cover Letter
+      try {
+          coverLetterContent = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+      } catch (e) {
+          console.warn("Gemini Cover Letter failed, falling back to local...");
+          coverLetterContent = await localGenerateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+      }
+
+      return { customizedResumeContent, coverLetterContent };
   };
 
   const handleBulkGenerateDocs = async () => {
     if (!userProfile?.resumeContent || userProfile.resumeContent.length < 20) {
-        showNotification("Please upload a resume in Settings first.", "error");
+        showNotification("Upload a resume in Settings first.", "error");
         return;
     }
 
@@ -228,29 +238,21 @@ export const App: React.FC = () => {
             const job = jobs.find(j => j.id === id);
             if (!job || job.customizedResume) continue;
             
-            showNotification(`Generating docs for ${job.company}...`, 'success');
+            showNotification(`Tailoring for ${job.company}...`, 'success');
             
-            // Sequential processing with jitter to avoid concurrent overhead
-            const newResume = await callAiWithRetry(() => 
-                customizeResume(job.title, job.company, job.description, userProfile.resumeContent)
-            );
-            await new Promise(r => setTimeout(r, 1200));
-            const newLetter = await callAiWithRetry(() => 
-                generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
-            );
+            const { customizedResumeContent, coverLetterContent } = await tailorDocuments(job);
 
-            const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
+            const updatedJob = { ...job, customizedResume: customizedResumeContent, coverLetter: coverLetterContent, status: JobStatus.SAVED };
             setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
             if (token) await saveJobToDb(updatedJob, token);
             count++;
             
-            // Small pause between different jobs in bulk
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 500));
         }
-        showNotification(`Bulk generation complete for ${count} jobs.`, "success");
+        showNotification(`Finished Resume/Letter generation for ${count} jobs.`, "success");
     } catch (e) {
-        console.error("Bulk AI Error:", e);
-        showNotification("Generation interrupted. Some jobs may have been skipped.", "error");
+        console.error("Bulk Generation Error:", e);
+        showNotification("Process interrupted.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());
@@ -263,31 +265,21 @@ export const App: React.FC = () => {
         return;
     }
 
-    showNotification(`Tailoring Resume & Letter for ${job.company}...`, 'success');
+    showNotification(`Generating Resume & Letter for ${job.company}...`, 'success');
     
     try {
-        // Use retry wrapper for each component of the generation
-        const newResume = await callAiWithRetry(() => 
-            customizeResume(job.title, job.company, job.description, userProfile.resumeContent)
-        );
-        
-        // Artificial delay to prevent overlapping requests
-        await new Promise(r => setTimeout(r, 1500)); 
-        
-        const newLetter = await callAiWithRetry(() => 
-            generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
-        );
+        const { customizedResumeContent, coverLetterContent } = await tailorDocuments(job);
 
-        const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
+        const updatedJob = { ...job, customizedResume: customizedResumeContent, coverLetter: coverLetterContent, status: JobStatus.SAVED };
         setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
         
         const token = await getToken();
         if (token) await saveJobToDb(updatedJob, token);
         
-        showNotification("Resume and Letter generated successfully.", "success");
+        showNotification("Resume/Letter tailored successfully.", "success");
     } catch (e) {
         console.error("AI Generation Error:", e);
-        showNotification("AI tailoring interrupted. Please try again in a few seconds.", "error");
+        showNotification("Tailoring failed. Check your network.", "error");
     }
   };
 
@@ -325,36 +317,24 @@ export const App: React.FC = () => {
         </div>
         
         <div className="flex-1 px-4 py-2 overflow-y-auto custom-scrollbar">
-          <button 
-            onClick={() => setCurrentView(ViewState.DASHBOARD)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.DASHBOARD ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.DASHBOARD)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.DASHBOARD ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <LayoutDashboard className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Dashboard</span>
           </button>
           
-          <button 
-            onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <SearchIcon className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Scanned Jobs</span>
             {detectedJobsCount > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">{detectedJobsCount}</span>}
           </button>
 
-          <button 
-            onClick={() => setCurrentView(ViewState.TRACKER)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.TRACKER ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.TRACKER)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.TRACKER ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <List className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Applications</span>
             {trackedJobsCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full">{trackedJobsCount}</span>}
           </button>
           
-          <button 
-            onClick={() => setCurrentView(ViewState.EMAILS)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <Mail className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Inbox Scanner</span>
           </button>
@@ -376,10 +356,7 @@ export const App: React.FC = () => {
             <span className="flex-1 text-start text-sm">Help Guide</span>
           </button>
           
-          <button 
-            onClick={() => setCurrentView(ViewState.SETTINGS)} 
-            className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
+          <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}>
             <SettingsIcon className="w-5 h-5 me-3" />
             <span className="flex-1 text-start text-sm">Settings</span>
           </button>
@@ -404,7 +381,7 @@ export const App: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold">Complete your profile</h4>
-                    <p className="text-xs text-indigo-100">Setup your resume to enable AI document generation.</p>
+                    <p className="text-xs text-indigo-100">Upload your resume to enable AI tailoring.</p>
                   </div>
                 </div>
                 <button 
@@ -422,16 +399,10 @@ export const App: React.FC = () => {
         {currentView === ViewState.SELECTED_JOBS && (
             <div className="h-full overflow-y-auto p-8 animate-in fade-in pb-32">
                 <div className="mb-8 flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Found from your inbox</p>
-                    </div>
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
                     {detectedJobsCount > 0 && (
-                        <button 
-                            onClick={handleClearScannedJobs}
-                            className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black uppercase transition-all"
-                        >
-                            <Trash2 className="w-4 h-4" /> Clear List
+                        <button onClick={handleClearScannedJobs} className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black uppercase transition-all">
+                            <Trash2 className="w-4 h-4" /> Clear Scanned
                         </button>
                     )}
                 </div>
@@ -439,71 +410,34 @@ export const App: React.FC = () => {
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
-                            <JobCard 
-                                key={job.id} 
-                                job={job} 
-                                onClick={(j) => setSelectedJobId(j.id)} 
-                                isSelected={selectedJobId === job.id} 
-                                isChecked={checkedJobIds.has(job.id)} 
-                                onToggleCheck={handleToggleCheck} 
-                                onAutoApply={(e, j) => handleIndividualGenerate(j)} 
-                            />
+                            <JobCard key={job.id} job={job} onClick={(j) => setSelectedJobId(j.id)} isSelected={selectedJobId === job.id} isChecked={checkedJobIds.has(job.id)} onToggleCheck={handleToggleCheck} onAutoApply={(e, j) => handleIndividualGenerate(j)} />
                         ))}
                     </div>
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
-                        <Mail className="w-16 h-16 mb-4 opacity-10" />
-                        <p className="font-bold text-slate-600">No new leads found.</p>
-                        <button onClick={() => setCurrentView(ViewState.EMAILS)} className="mt-4 text-xs font-black text-indigo-600 hover:underline uppercase tracking-widest">Run Scanner</button>
+                        <Mail className="w-16 h-16 mb-4 opacity-10" /><p className="font-bold text-slate-600">No new jobs found from scan.</p>
+                        <button onClick={() => setCurrentView(ViewState.EMAILS)} className="mt-4 text-xs font-black text-indigo-600 uppercase tracking-widest">Start Scanning</button>
                     </div>
                 )}
 
-                {/* Bulk Action UI */}
                 {checkedJobIds.size > 0 && (
                     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-6 py-4 rounded-[2rem] shadow-2xl flex items-center gap-8 border border-white/10 animate-in slide-in-from-bottom-10">
-                        <div className="flex items-center gap-3 pr-8 border-r border-white/10">
+                        <div className="flex items-center gap-3">
                             <span className="bg-indigo-600 text-[10px] font-black px-2 py-1 rounded-full">{checkedJobIds.size}</span>
                             <span className="text-xs font-bold uppercase tracking-widest">Selected</span>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <button 
-                                onClick={handleBulkGenerateDocs}
-                                disabled={isBulkProcessing}
-                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                            >
-                                {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                Bulk Resume/Letter Generation
-                            </button>
-                            <button 
-                                onClick={handleBulkDeselect}
-                                disabled={isBulkProcessing}
-                                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                            >
-                                <CheckSquare className="w-4 h-4" /> Deselect
-                            </button>
-                            <button onClick={() => setCheckedJobIds(new Set())} className="p-2 text-slate-400 hover:text-white">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
+                        <button onClick={handleBulkGenerateDocs} disabled={isBulkProcessing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                            {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            Resume/Letter Generation
+                        </button>
+                        <button onClick={() => setCheckedJobIds(new Set())} className="p-2 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
                     </div>
                 )}
             </div>
         )}
 
         {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
-        {currentView === ViewState.SETTINGS && (
-            <div className="h-full p-8 overflow-y-auto animate-in fade-in">
-                <Settings 
-                    userProfile={userProfile!} 
-                    onUpdate={handleUpdateProfile} 
-                    dirHandle={dirHandle} 
-                    onDirHandleChange={setDirHandle} 
-                    jobs={jobs} 
-                    showNotification={showNotification} 
-                    onReset={() => signOut()} 
-                />
-            </div>
-        )}
+        {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto animate-in fade-in"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
         {currentView === ViewState.EMAILS && <div className="h-full p-6 animate-in fade-in"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
         {currentView === ViewState.SUBSCRIPTION && <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />}
         {currentView === ViewState.SUPPORT && <Support />}
