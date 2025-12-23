@@ -30,18 +30,30 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
+    // Explicitly format for the backend to ensure no missing fields
+    const payload = {
+        ...profile,
+        // Ensure snake_case for DB-compatible fields just in case
+        full_name: profile.fullName,
+        resume_content: profile.resumeContent,
+        resume_file_name: profile.resumeFileName,
+        connected_accounts: profile.connectedAccounts
+    };
+
     const response = await fetch(`${API_BASE}/profile`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${clerkToken}`
         },
-        body: JSON.stringify(profile)
+        body: JSON.stringify(payload)
     });
+    
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || 'Failed to save profile to cloud storage');
     }
+    
     const data = await response.json();
     return normalizeProfile(data);
 };

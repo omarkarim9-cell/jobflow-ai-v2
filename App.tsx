@@ -118,19 +118,20 @@ export const App: React.FC = () => {
   }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
+    // Optimistic Update
     setUserProfile(updatedProfile);
+    
     try {
         const token = await getToken();
         if (token) {
-            // Ensure full profile including preferences is saved
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced successfully.", "success");
+            showNotification("Profile synced to cloud.", "success");
         } else {
-            showNotification("Profile updated (Local).", "success");
+            showNotification("Saved locally (No connection).", "success");
         }
     } catch (error) {
-        // Fix for misleading error: show success because it IS saved locally in state
-        showNotification("Profile saved locally. Cloud sync pending.", "success");
+        console.error("Save Profile Error:", error);
+        showNotification("Cloud sync failed. Saved locally.", "success");
     }
   };
   
@@ -195,7 +196,7 @@ export const App: React.FC = () => {
 
   const handleBulkDeselect = () => {
       setCheckedJobIds(new Set());
-      showNotification("Selection cleared.", "success");
+      showNotification("Checks cleared.", "success");
   };
 
   const handleBulkGenerateDocs = async () => {
@@ -205,19 +206,19 @@ export const App: React.FC = () => {
     }
 
     setIsBulkProcessing(true);
-    const selectedJobs = jobs.filter(j => checkedJobIds.has(j.id));
+    const selectedIds = Array.from(checkedJobIds);
     const token = await getToken();
     let count = 0;
 
     try {
-        const updatedJobs = [...jobs];
-        for (const job of selectedJobs) {
-            if (job.customizedResume) continue;
+        for (const id of selectedIds) {
+            const job = jobs.find(j => j.id === id);
+            if (!job || job.customizedResume) continue;
             
             showNotification(`Processing ${job.company}...`, 'success');
             
-            // Add a small delay between AI calls to improve reliability
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Incremental delay to stay within rate limits
+            await new Promise(resolve => setTimeout(resolve, 800));
 
             const [newResume, newLetter] = await Promise.all([
                 customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
@@ -225,17 +226,18 @@ export const App: React.FC = () => {
             ]);
 
             const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
-            const index = updatedJobs.findIndex(j => j.id === job.id);
-            if (index !== -1) updatedJobs[index] = updatedJob;
-
+            
+            // Incremental state update for UI progress
+            setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
+            
+            // Incremental cloud save to prevent data loss on interruption
             if (token) await saveJobToDb(updatedJob, token);
             count++;
         }
-        setJobs(updatedJobs);
-        showNotification(`Finished bulk generation for ${count} jobs.`, "success");
+        showNotification(`Bulk generation complete for ${count} jobs.`, "success");
     } catch (e) {
         console.error("Bulk AI Error:", e);
-        showNotification("Bulk action interrupted by AI service.", "error");
+        showNotification("Action interrupted. Partial progress saved.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());

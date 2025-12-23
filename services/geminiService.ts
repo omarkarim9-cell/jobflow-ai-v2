@@ -101,8 +101,9 @@ export const generateCoverLetter = async (
     The letter should be persuasive, tailored to the specific job requirements, and professional in tone.
     `;
 
+    // Switched to Flash for bulk reliability and speed
     const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt
     });
 
@@ -131,8 +132,9 @@ export const customizeResume = async (
     - Return the full updated resume text.
     `;
 
+    // Switched to Flash for bulk reliability and speed
     const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt
     });
 
@@ -144,7 +146,7 @@ export const extractJobFromUrl = async (url: string): Promise<any> => {
     const prompt = `Extract full job details from this URL: ${url}. Return title, company, location, and a detailed description.`;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }]
