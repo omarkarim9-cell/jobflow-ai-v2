@@ -74,8 +74,8 @@ export const UserManual: React.FC<UserManualProps> = ({ userProfile }) => {
                              <div className="p-6">
                                  <p className="text-sm text-slate-600 mb-4">Complete your profile to unlock AI features:</p>
                                  <ul className="list-disc list-inside space-y-2 text-sm text-slate-700">
-                                     <li>Upload a master resume (.txt)</li>
-                                     <li>Define your target roles</li>
+                                     <li>Upload a master resume (.txt format)</li>
+                                     <li>Define your target job roles</li>
                                      <li>Set your preferred locations</li>
                                  </ul>
                              </div>
@@ -89,8 +89,7 @@ export const UserManual: React.FC<UserManualProps> = ({ userProfile }) => {
                              <div className="p-6">
                                  <h3 className="font-bold text-slate-900 mb-2">Why Token Access?</h3>
                                  <p className="text-sm text-slate-700 leading-relaxed">
-                                     JobFlow uses secure temporary tokens to read job-related headers from your inbox. 
-                                     {" "}<strong>We never store or see your password.</strong>
+                                     JobFlow uses secure temporary tokens to read job-related headers from your inbox. We never store or see your primary account password.
                                  </p>
                              </div>
                         </section>
@@ -102,7 +101,7 @@ export const UserManual: React.FC<UserManualProps> = ({ userProfile }) => {
                              </div>
                              <div className="p-6">
                                  <p className="text-sm text-slate-600">
-                                     The scanner finds job leads in your email. Results are transient and cleared on refresh unless saved to the tracker.
+                                     The scanner finds job leads in your email. Results are transient and cleared on refresh unless saved specifically to the tracker.
                                  </p>
                              </div>
                         </section>

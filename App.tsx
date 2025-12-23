@@ -38,8 +38,8 @@ import {
   ArrowRight,
   Trash2,
   Wand2,
-  CheckCircle,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -102,7 +102,8 @@ export const App: React.FC = () => {
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Cloud sync unavailable. Working in local mode.", "error");
+          // Fixed error: Changed invalid notification type 'info' to 'error' to match NotificationType definition.
+          showNotification("Cloud sync unavailable. Local mode active.", "error");
       } finally {
           setLoading(false);
       }
@@ -122,13 +123,13 @@ export const App: React.FC = () => {
         const token = await getToken();
         if (token) {
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced to cloud.", "success");
+            showNotification("Profile synced successfully.", "success");
         } else {
-            showNotification("Saved locally (No token).", "success");
+            showNotification("Profile updated (Local).", "success");
         }
     } catch (error) {
-        // Misleading "error" styling fixed here - it's a success in local terms
-        showNotification("Saved locally. Cloud sync pending.", "success");
+        // Fix for misleading error: show success because it IS saved locally
+        showNotification("Profile updated. Cloud sync pending.", "success");
     }
   };
   
@@ -151,7 +152,7 @@ export const App: React.FC = () => {
     getToken().then(token => {
         if (token) newJobs.forEach(job => saveJobToDb(job, token));
     });
-    showNotification(`Imported ${newJobs.length} jobs.`, 'success');
+    showNotification(`Imported ${newJobs.length} leads.`, 'success');
   };
 
   const handleAddManualJob = async (job: Job) => {
@@ -177,7 +178,7 @@ export const App: React.FC = () => {
   };
 
   const handleClearScannedJobs = async () => {
-    if (window.confirm("This will remove all detected jobs from the scanned list. Continue?")) {
+    if (window.confirm("This will clear ALL current scanned job leads. Application history will be kept. Proceed?")) {
         const detectedIds = jobs.filter(j => j.status === JobStatus.DETECTED).map(j => j.id);
         setJobs(prev => prev.filter(j => j.status !== JobStatus.DETECTED));
         const token = await getToken();
@@ -205,8 +206,8 @@ export const App: React.FC = () => {
   };
 
   const handleBulkGenerateDocs = async () => {
-    if (!userProfile?.resumeContent || userProfile.resumeContent.length < 10) {
-        showNotification("Upload a resume in Settings first!", "error");
+    if (!userProfile?.resumeContent || userProfile.resumeContent.length < 20) {
+        showNotification("Please upload a resume in Settings first.", "error");
         return;
     }
 
@@ -218,7 +219,7 @@ export const App: React.FC = () => {
     try {
         const updatedJobs = [...jobs];
         for (const job of selectedJobs) {
-            if (job.customizedResume) continue; // Skip if already done
+            if (job.customizedResume) continue;
             
             showNotification(`Processing ${job.company}...`, 'success');
             
@@ -235,12 +236,38 @@ export const App: React.FC = () => {
             count++;
         }
         setJobs(updatedJobs);
-        showNotification(`Generated documents for ${count} jobs.`, "success");
+        showNotification(`Finished bulk generation for ${count} jobs.`, "success");
     } catch (e) {
-        showNotification("Bulk generation interrupted.", "error");
+        showNotification("AI service interrupted.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());
+    }
+  };
+
+  const handleIndividualGenerate = async (job: Job) => {
+    if (!userProfile?.resumeContent || userProfile.resumeContent.length < 20) {
+        showNotification("Upload a resume in Settings first.", "error");
+        return;
+    }
+
+    showNotification(`Tailoring docs for ${job.company}...`, 'success');
+    
+    try {
+        const [newResume, newLetter] = await Promise.all([
+            customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
+            generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
+        ]);
+
+        const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
+        setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
+        
+        const token = await getToken();
+        if (token) await saveJobToDb(updatedJob, token);
+        
+        showNotification("Documents generated.", "success");
+    } catch (e) {
+        showNotification("AI Tailoring failed.", "error");
     }
   };
 
@@ -373,21 +400,22 @@ export const App: React.FC = () => {
         )}
         
         {currentView === ViewState.SELECTED_JOBS && (
-            <div className="h-full overflow-y-auto p-8 animate-in fade-in relative pb-24">
-                <div className="mb-6 flex items-center justify-between">
+            <div className="h-full overflow-y-auto p-8 animate-in fade-in pb-32">
+                <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
-                        <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-widest">Leads found from your inbox</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Found from your inbox</p>
                     </div>
-                    {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 && (
+                    {detectedJobsCount > 0 && (
                         <button 
                             onClick={handleClearScannedJobs}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-black uppercase transition-colors"
+                            className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black uppercase transition-all"
                         >
-                            <Trash2 className="w-3 h-3" /> Clear List
+                            <Trash2 className="w-4 h-4" /> Clear List
                         </button>
                     )}
                 </div>
+                
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {jobs.filter(j => j.status === JobStatus.DETECTED).map(job => (
@@ -398,42 +426,43 @@ export const App: React.FC = () => {
                                 isSelected={selectedJobId === job.id} 
                                 isChecked={checkedJobIds.has(job.id)} 
                                 onToggleCheck={handleToggleCheck} 
-                                onAutoApply={() => {}} 
+                                onAutoApply={(e, j) => handleIndividualGenerate(j)} 
                             />
                         ))}
                     </div>
                 ) : (
                     <div className="h-96 flex flex-col items-center justify-center text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
                         <Mail className="w-16 h-16 mb-4 opacity-10" />
-                        <p className="font-bold text-slate-600">No scanned jobs found.</p>
-                        <button onClick={() => setCurrentView(ViewState.EMAILS)} className="mt-4 text-xs font-black text-indigo-600 hover:underline">RUN INBOX SCANNER</button>
+                        <p className="font-bold text-slate-600">No new leads found.</p>
+                        <button onClick={() => setCurrentView(ViewState.EMAILS)} className="mt-4 text-xs font-black text-indigo-600 hover:underline uppercase tracking-widest">Run Scanner</button>
                     </div>
                 )}
 
-                {/* Floating Bulk Action Bar */}
+                {/* Bulk Action UI */}
                 {checkedJobIds.size > 0 && (
-                    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 border border-white/10 animate-in slide-in-from-bottom-8 duration-500`}>
-                        <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-6 py-4 rounded-[2rem] shadow-2xl flex items-center gap-8 border border-white/10 animate-in slide-in-from-bottom-10">
+                        <div className="flex items-center gap-3 pr-8 border-r border-white/10">
                             <span className="bg-indigo-600 text-[10px] font-black px-2 py-1 rounded-full">{checkedJobIds.size}</span>
                             <span className="text-xs font-bold uppercase tracking-widest">Selected</span>
                         </div>
-                        
                         <div className="flex items-center gap-3">
                             <button 
                                 onClick={handleBulkGenerateDocs}
                                 disabled={isBulkProcessing}
-                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
                             >
-                                {isBulkProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                                Generate AI Docs
+                                {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                Bulk Generate Docs
                             </button>
-                            
                             <button 
                                 onClick={handleBulkClearChecked}
                                 disabled={isBulkProcessing}
-                                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                             >
-                                <X className="w-3 h-3" /> Remove
+                                <Trash2 className="w-4 h-4" /> Remove
+                            </button>
+                            <button onClick={() => setCheckedJobIds(new Set())} className="p-2 text-slate-400 hover:text-white">
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
@@ -442,7 +471,19 @@ export const App: React.FC = () => {
         )}
 
         {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); setCurrentView(ViewState.SELECTED_JOBS); }} />}
-        {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto animate-in fade-in"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
+        {currentView === ViewState.SETTINGS && (
+            <div className="h-full p-8 overflow-y-auto animate-in fade-in">
+                <Settings 
+                    userProfile={userProfile!} 
+                    onUpdate={handleUpdateProfile} 
+                    dirHandle={dirHandle} 
+                    onDirHandleChange={setDirHandle} 
+                    jobs={jobs} 
+                    showNotification={showNotification} 
+                    onReset={() => signOut()} 
+                />
+            </div>
+        )}
         {currentView === ViewState.EMAILS && <div className="h-full p-6 animate-in fade-in"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
         {currentView === ViewState.SUBSCRIPTION && <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />}
         {currentView === ViewState.SUPPORT && <Support />}

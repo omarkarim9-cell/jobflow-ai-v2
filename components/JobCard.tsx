@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Job, JobStatus } from '../types';
-import { Building2, MapPin, Calendar, StickyNote, Download, Send, Wand2 } from 'lucide-react';
+import { Building2, MapPin, Calendar, StickyNote, Download, Send, Wand2, Sparkles } from 'lucide-react';
 import { openSafeApplicationUrl } from '../services/automationService';
 
 interface JobCardProps {
@@ -54,91 +53,81 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
   return (
     <div 
       onClick={() => onClick(job)}
-      className={`p-4 mb-3 rounded-xl border cursor-pointer transition-all duration-200 relative group ${
+      className={`p-5 mb-3 rounded-2xl border cursor-pointer transition-all duration-300 relative group ${
         isSelected 
-          ? 'bg-white border-indigo-500 shadow-md ring-1 ring-indigo-500' 
-          : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm'
+          ? 'bg-white border-indigo-500 shadow-xl ring-1 ring-indigo-500' 
+          : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-lg'
       }`}
     >
-      <div className="flex justify-between items-start mb-2">
+      <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3 overflow-hidden">
            {/* Checkbox for Bulk Selection */}
            <div 
              onClick={handleCheckboxClick}
-             className={`w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0 ${
+             className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shrink-0 ${
                isChecked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 hover:border-indigo-400 bg-white'
              }`}
            >
              {isChecked && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
            </div>
 
-           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-bold text-lg shrink-0">
-             {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-lg"/> : job.company.charAt(0)}
+           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-slate-400 font-bold text-xl shrink-0 border border-slate-100">
+             {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl"/> : job.company.charAt(0)}
            </div>
            <div className="min-w-0 flex-1">
-             <h3 className="font-semibold text-slate-900 leading-tight truncate pe-2">{job.title}</h3>
-             <p className="text-sm text-slate-500 flex items-center mt-0.5 truncate">
-               <Building2 className="w-3 h-3 me-1 shrink-0" /> {job.company}
+             <h3 className="font-bold text-slate-900 leading-tight truncate pe-2">{job.title}</h3>
+             <p className="text-xs text-slate-500 font-medium flex items-center mt-1 truncate">
+               <Building2 className="w-3 h-3 me-1.5 shrink-0" /> {job.company}
              </p>
            </div>
         </div>
-        <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${getStatusColor(job.status)}`}>
+        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border whitespace-nowrap shrink-0 ${getStatusColor(job.status)}`}>
           {job.status}
         </span>
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-slate-500 mt-3 ms-8">
+      <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-4 ms-9">
         <span className="flex items-center truncate">
-          <MapPin className="w-3 h-3 me-1 shrink-0" /> {job.location}
+          <MapPin className="w-3.5 h-3.5 me-1.5 shrink-0 text-slate-300" /> {job.location}
         </span>
         <span className="flex items-center shrink-0">
-          <Calendar className="w-3 h-3 me-1 shrink-0" /> {new Date(job.detectedAt).toLocaleDateString()}
+          <Calendar className="w-3.5 h-3.5 me-1.5 shrink-0 text-slate-300" /> {new Date(job.detectedAt).toLocaleDateString()}
         </span>
-        {job.notes && (
-            <span className="flex items-center text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded" title="Has Notes">
-                <StickyNote className="w-3 h-3 me-1" /> Note
-            </span>
-        )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between ms-8">
-         <div className="flex items-center gap-1">
-            <div className="text-xs font-medium text-slate-400">Match:</div>
-            <div className={`text-xs font-bold ${job.matchScore > 80 ? 'text-green-600' : 'text-yellow-600'}`}>
+      <div className="mt-5 flex items-center justify-between ms-9">
+         <div className="flex items-center gap-1.5">
+            <div className="text-[10px] font-black text-slate-300 uppercase">Match:</div>
+            <div className={`text-xs font-black ${job.matchScore > 80 ? 'text-green-600' : 'text-amber-600'}`}>
               {job.matchScore}%
             </div>
          </div>
          
          <div className="flex gap-2">
-            {docsReady && (
-                <>
+            {docsReady ? (
+                <div className="flex gap-2">
                     <button 
-                        onClick={(e) => handleDownload(e, job.customizedResume!, `${job.company.replace(/\s+/g, '_')}_Resume.txt`)}
-                        className="text-xs bg-white text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 px-2 py-1 rounded flex items-center transition-colors shadow-sm"
-                        title="Download Resume"
+                        onClick={(e) => handleDownload(e, job.customizedResume!, `${job.company}_Resume.txt`)}
+                        className="text-[10px] font-black uppercase tracking-wider bg-white text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 px-3 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
+                        title="Download Tailored Resume"
                     >
-                        <Download className="w-3 h-3" />
+                        <Download className="w-3.5 h-3.5" />
                     </button>
-                </>
-            )}
-
-            {/* Apply Button - Always visible if URL exists */}
-            <button 
-                onClick={handleApply}
-                className="text-xs bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded border border-green-600 font-medium flex items-center transition-colors shadow-sm"
-            >
-                Apply <Send className="w-3 h-3 ms-1" />
-            </button>
-
-            {/* Auto-Apply Button (only if docs NOT ready yet) */}
-            {!docsReady && (job.status === JobStatus.DETECTED || job.status === JobStatus.SAVED) && (
-                 <button 
-                   onClick={(e) => onAutoApply(e, job)}
-                   className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded border border-indigo-200 font-medium flex items-center transition-colors"
-                 >
-                    <Wand2 className="w-3 h-3 me-1" />
-                    Auto-Apply
-                 </button>
+                    <button 
+                        onClick={handleApply}
+                        className="text-[10px] font-black uppercase tracking-wider bg-green-600 text-white hover:bg-green-700 px-4 py-1.5 rounded-xl border border-green-600 flex items-center transition-all shadow-md shadow-green-100"
+                    >
+                        Apply <Send className="w-3 h-3 ms-2 rtl:rotate-180" />
+                    </button>
+                </div>
+            ) : (
+                <button 
+                  onClick={(e) => onAutoApply(e, job)}
+                  className="text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl border border-indigo-600 flex items-center transition-all shadow-lg shadow-indigo-100"
+                >
+                   <Sparkles className="w-3.5 h-3.5 me-2" />
+                   Generate Docs
+                </button>
             )}
          </div>
       </div>
