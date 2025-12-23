@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, JobStatus } from '../types';
-import { Building2, MapPin, Calendar, StickyNote, Download, Send, Wand2, Sparkles } from 'lucide-react';
+import { Building2, MapPin, Calendar, StickyNote, Download, Send, FileText, Sparkles } from 'lucide-react';
 import { openSafeApplicationUrl } from '../services/automationService';
 
 interface JobCardProps {
@@ -49,6 +49,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
   };
 
   const docsReady = !!job.customizedResume;
+  const letterReady = !!job.coverLetter;
 
   return (
     <div 
@@ -105,14 +106,23 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
          
          <div className="flex gap-2">
             {docsReady ? (
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                     <button 
                         onClick={(e) => handleDownload(e, job.customizedResume!, `${job.company}_Resume.txt`)}
-                        className="text-[10px] font-black uppercase tracking-wider bg-white text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 px-3 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
+                        className="text-[10px] font-black uppercase tracking-wider bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
                         title="Download Tailored Resume"
                     >
-                        <Download className="w-3.5 h-3.5" />
+                        <FileText className="w-3.5 h-3.5" />
                     </button>
+                    {letterReady && (
+                        <button 
+                            onClick={(e) => handleDownload(e, job.coverLetter!, `${job.company}_CoverLetter.txt`)}
+                            className="text-[10px] font-black uppercase tracking-wider bg-white text-purple-600 hover:bg-purple-50 border border-purple-200 px-2.5 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
+                            title="Download Cover Letter"
+                        >
+                            <StickyNote className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     <button 
                         onClick={handleApply}
                         className="text-[10px] font-black uppercase tracking-wider bg-green-600 text-white hover:bg-green-700 px-4 py-1.5 rounded-xl border border-green-600 flex items-center transition-all shadow-md shadow-green-100"
@@ -126,7 +136,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
                   className="text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl border border-indigo-600 flex items-center transition-all shadow-lg shadow-indigo-100"
                 >
                    <Sparkles className="w-3.5 h-3.5 me-2" />
-                   Generate Docs
+                   Resume/Letter Generation
                 </button>
             )}
          </div>

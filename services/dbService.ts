@@ -30,14 +30,23 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // Explicitly format for the backend to ensure no missing fields
+    // Explicitly format for the backend to ensure no missing fields or mismatches
     const payload = {
         ...profile,
-        // Ensure snake_case for DB-compatible fields just in case
+        // Backend compatibility mappings
         full_name: profile.fullName,
         resume_content: profile.resumeContent,
         resume_file_name: profile.resumeFileName,
-        connected_accounts: profile.connectedAccounts
+        connected_accounts: profile.connectedAccounts,
+        // Ensure the preferences object is correctly deep-copied for JSON storage
+        preferences: {
+            ...profile.preferences,
+            // Mirror camelCase to snake_case just in case the backend DB columns rely on it
+            target_roles: profile.preferences.targetRoles,
+            target_locations: profile.preferences.targetLocations,
+            min_salary: profile.preferences.minSalary,
+            remote_only: profile.preferences.remoteOnly
+        }
     };
 
     const response = await fetch(`${API_BASE}/profile`, {

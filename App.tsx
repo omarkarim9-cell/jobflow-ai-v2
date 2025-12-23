@@ -124,14 +124,13 @@ export const App: React.FC = () => {
     try {
         const token = await getToken();
         if (token) {
+            // This now includes the full preferences object for Neon
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile synced to cloud.", "success");
-        } else {
-            showNotification("Saved locally (No connection).", "success");
+            showNotification("Profile and preferences synced to cloud.", "success");
         }
     } catch (error) {
-        console.error("Save Profile Error:", error);
-        showNotification("Cloud sync failed. Saved locally.", "success");
+        console.error("Profile Save Error:", error);
+        showNotification("Cloud save failed. Profile kept locally.", "error");
     }
   };
   
@@ -196,7 +195,7 @@ export const App: React.FC = () => {
 
   const handleBulkDeselect = () => {
       setCheckedJobIds(new Set());
-      showNotification("Checks cleared.", "success");
+      showNotification("Selection cleared.", "success");
   };
 
   const handleBulkGenerateDocs = async () => {
@@ -215,29 +214,22 @@ export const App: React.FC = () => {
             const job = jobs.find(j => j.id === id);
             if (!job || job.customizedResume) continue;
             
-            showNotification(`Processing ${job.company}...`, 'success');
+            showNotification(`Generating for ${job.company}...`, 'success');
             
-            // Incremental delay to stay within rate limits
-            await new Promise(resolve => setTimeout(resolve, 800));
-
-            const [newResume, newLetter] = await Promise.all([
-                customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
-                generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
-            ]);
+            // Sequential generation with delays prevents "AI tailoring failed" errors
+            const newResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+            await new Promise(r => setTimeout(r, 800)); // Rate limit buffer
+            const newLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
 
             const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
-            
-            // Incremental state update for UI progress
             setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
-            
-            // Incremental cloud save to prevent data loss on interruption
             if (token) await saveJobToDb(updatedJob, token);
             count++;
         }
-        showNotification(`Bulk generation complete for ${count} jobs.`, "success");
+        showNotification(`Finished Resume/Letter Generation for ${count} jobs.`, "success");
     } catch (e) {
         console.error("Bulk AI Error:", e);
-        showNotification("Action interrupted. Partial progress saved.", "error");
+        showNotification("Generation process interrupted.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());
@@ -250,13 +242,13 @@ export const App: React.FC = () => {
         return;
     }
 
-    showNotification(`Tailoring docs for ${job.company}...`, 'success');
+    showNotification(`Tailoring Resume & Letter for ${job.company}...`, 'success');
     
     try {
-        const [newResume, newLetter] = await Promise.all([
-            customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
-            generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
-        ]);
+        // Sequential calls prevent model overloading errors
+        const newResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
+        await new Promise(r => setTimeout(r, 1000)); // Delay between calls to ensure stability
+        const newLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
 
         const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
         setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
@@ -264,9 +256,10 @@ export const App: React.FC = () => {
         const token = await getToken();
         if (token) await saveJobToDb(updatedJob, token);
         
-        showNotification("Documents generated.", "success");
+        showNotification("Resume and Letter generated successfully.", "success");
     } catch (e) {
-        showNotification("AI Tailoring failed.", "error");
+        console.error("AI Generation Error:", e);
+        showNotification("AI tailoring failed. Please try again in a few seconds.", "error");
     }
   };
 
@@ -451,7 +444,7 @@ export const App: React.FC = () => {
                                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
                             >
                                 {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                Bulk Generate Docs
+                                Bulk Resume/Letter Generation
                             </button>
                             <button 
                                 onClick={handleBulkDeselect}
