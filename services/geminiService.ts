@@ -103,10 +103,7 @@ export const generateCoverLetter = async (
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: {
-            thinkingConfig: { thinkingBudget: 2000 }
-        }
+        contents: prompt
     });
 
     return response.text || "";
@@ -136,10 +133,7 @@ export const customizeResume = async (
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: {
-            thinkingConfig: { thinkingBudget: 4000 }
-        }
+        contents: prompt
     });
 
     return response.text || "";

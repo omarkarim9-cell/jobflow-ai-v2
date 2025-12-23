@@ -39,7 +39,8 @@ import {
   Trash2,
   Wand2,
   X,
-  Sparkles
+  Sparkles,
+  CheckSquare
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -102,7 +103,6 @@ export const App: React.FC = () => {
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          // Fixed error: Changed invalid notification type 'info' to 'error' to match NotificationType definition.
           showNotification("Cloud sync unavailable. Local mode active.", "error");
       } finally {
           setLoading(false);
@@ -122,14 +122,15 @@ export const App: React.FC = () => {
     try {
         const token = await getToken();
         if (token) {
+            // Ensure full profile including preferences is saved
             await saveUserProfile(updatedProfile, token);
             showNotification("Profile synced successfully.", "success");
         } else {
             showNotification("Profile updated (Local).", "success");
         }
     } catch (error) {
-        // Fix for misleading error: show success because it IS saved locally
-        showNotification("Profile updated. Cloud sync pending.", "success");
+        // Fix for misleading error: show success because it IS saved locally in state
+        showNotification("Profile saved locally. Cloud sync pending.", "success");
     }
   };
   
@@ -192,17 +193,9 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleBulkClearChecked = async () => {
-      const idsToDelete = Array.from(checkedJobIds);
-      setJobs(prev => prev.filter(j => !checkedJobIds.has(j.id)));
-      const token = await getToken();
-      if (token) {
-          for (const id of idsToDelete) {
-              await deleteJobFromDb(id, token);
-          }
-      }
+  const handleBulkDeselect = () => {
       setCheckedJobIds(new Set());
-      showNotification(`Removed ${idsToDelete.length} jobs.`, "success");
+      showNotification("Selection cleared.", "success");
   };
 
   const handleBulkGenerateDocs = async () => {
@@ -223,6 +216,9 @@ export const App: React.FC = () => {
             
             showNotification(`Processing ${job.company}...`, 'success');
             
+            // Add a small delay between AI calls to improve reliability
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const [newResume, newLetter] = await Promise.all([
                 customizeResume(job.title, job.company, job.description, userProfile.resumeContent),
                 generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
@@ -238,7 +234,8 @@ export const App: React.FC = () => {
         setJobs(updatedJobs);
         showNotification(`Finished bulk generation for ${count} jobs.`, "success");
     } catch (e) {
-        showNotification("AI service interrupted.", "error");
+        console.error("Bulk AI Error:", e);
+        showNotification("Bulk action interrupted by AI service.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());
@@ -384,7 +381,7 @@ export const App: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-bold">Complete your profile</h4>
-                    <p className="text-xs text-indigo-100">AI needs your resume to customize applications.</p>
+                    <p className="text-xs text-indigo-100">Setup your resume to enable AI document generation.</p>
                   </div>
                 </div>
                 <button 
@@ -455,11 +452,11 @@ export const App: React.FC = () => {
                                 Bulk Generate Docs
                             </button>
                             <button 
-                                onClick={handleBulkClearChecked}
+                                onClick={handleBulkDeselect}
                                 disabled={isBulkProcessing}
                                 className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                             >
-                                <Trash2 className="w-4 h-4" /> Remove
+                                <CheckSquare className="w-4 h-4" /> Deselect
                             </button>
                             <button onClick={() => setCheckedJobIds(new Set())} className="p-2 text-slate-400 hover:text-white">
                                 <X className="w-5 h-5" />
