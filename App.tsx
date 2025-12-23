@@ -103,7 +103,7 @@ export const App: React.FC = () => {
           setCurrentView(ViewState.DASHBOARD);
       } catch (e) {
           console.error("Sync error:", e);
-          showNotification("Cloud sync unavailable. Local mode active.", "error");
+          showNotification("Cloud connection error. Using local session.", "error");
       } finally {
           setLoading(false);
       }
@@ -118,19 +118,16 @@ export const App: React.FC = () => {
   }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updatedProfile: UserProfile) => {
-    // Optimistic Update
     setUserProfile(updatedProfile);
-    
     try {
         const token = await getToken();
         if (token) {
-            // This now includes the full preferences object for Neon
             await saveUserProfile(updatedProfile, token);
-            showNotification("Profile and preferences synced to cloud.", "success");
+            showNotification("Profile synced with Neon DB.", "success");
         }
     } catch (error) {
-        console.error("Profile Save Error:", error);
-        showNotification("Cloud save failed. Profile kept locally.", "error");
+        console.error("Cloud Save Error:", error);
+        showNotification("Cloud save failed. Changes kept locally.", "error");
     }
   };
   
@@ -198,6 +195,23 @@ export const App: React.FC = () => {
       showNotification("Selection cleared.", "success");
   };
 
+  /**
+   * Helper to perform AI actions with built-in retries for higher reliability.
+   */
+  const callAiWithRetry = async <T,>(fn: () => Promise<T>, retries = 2): Promise<T> => {
+      let lastError;
+      for (let i = 0; i <= retries; i++) {
+          try {
+              return await fn();
+          } catch (e) {
+              lastError = e;
+              console.warn(`AI attempt ${i + 1} failed, retrying...`, e);
+              if (i < retries) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+          }
+      }
+      throw lastError;
+  };
+
   const handleBulkGenerateDocs = async () => {
     if (!userProfile?.resumeContent || userProfile.resumeContent.length < 20) {
         showNotification("Please upload a resume in Settings first.", "error");
@@ -214,22 +228,29 @@ export const App: React.FC = () => {
             const job = jobs.find(j => j.id === id);
             if (!job || job.customizedResume) continue;
             
-            showNotification(`Generating for ${job.company}...`, 'success');
+            showNotification(`Generating docs for ${job.company}...`, 'success');
             
-            // Sequential generation with delays prevents "AI tailoring failed" errors
-            const newResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-            await new Promise(r => setTimeout(r, 800)); // Rate limit buffer
-            const newLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+            // Sequential processing with jitter to avoid concurrent overhead
+            const newResume = await callAiWithRetry(() => 
+                customizeResume(job.title, job.company, job.description, userProfile.resumeContent)
+            );
+            await new Promise(r => setTimeout(r, 1200));
+            const newLetter = await callAiWithRetry(() => 
+                generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
+            );
 
             const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
             setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
             if (token) await saveJobToDb(updatedJob, token);
             count++;
+            
+            // Small pause between different jobs in bulk
+            await new Promise(r => setTimeout(r, 800));
         }
-        showNotification(`Finished Resume/Letter Generation for ${count} jobs.`, "success");
+        showNotification(`Bulk generation complete for ${count} jobs.`, "success");
     } catch (e) {
         console.error("Bulk AI Error:", e);
-        showNotification("Generation process interrupted.", "error");
+        showNotification("Generation interrupted. Some jobs may have been skipped.", "error");
     } finally {
         setIsBulkProcessing(false);
         setCheckedJobIds(new Set());
@@ -245,10 +266,17 @@ export const App: React.FC = () => {
     showNotification(`Tailoring Resume & Letter for ${job.company}...`, 'success');
     
     try {
-        // Sequential calls prevent model overloading errors
-        const newResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent);
-        await new Promise(r => setTimeout(r, 1000)); // Delay between calls to ensure stability
-        const newLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+        // Use retry wrapper for each component of the generation
+        const newResume = await callAiWithRetry(() => 
+            customizeResume(job.title, job.company, job.description, userProfile.resumeContent)
+        );
+        
+        // Artificial delay to prevent overlapping requests
+        await new Promise(r => setTimeout(r, 1500)); 
+        
+        const newLetter = await callAiWithRetry(() => 
+            generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
+        );
 
         const updatedJob = { ...job, customizedResume: newResume, coverLetter: newLetter, status: JobStatus.SAVED };
         setJobs(prev => prev.map(j => j.id === job.id ? updatedJob : j));
@@ -259,7 +287,7 @@ export const App: React.FC = () => {
         showNotification("Resume and Letter generated successfully.", "success");
     } catch (e) {
         console.error("AI Generation Error:", e);
-        showNotification("AI tailoring failed. Please try again in a few seconds.", "error");
+        showNotification("AI tailoring interrupted. Please try again in a few seconds.", "error");
     }
   };
 

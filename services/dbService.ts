@@ -1,11 +1,26 @@
-import { Job, UserProfile } from '../types';
+import { Job, UserProfile, UserPreferences } from '../types';
 
 /**
  * Service to interact with Neon PostgreSQL via Vercel Serverless Functions.
- * This service uses the Clerk identity token to authenticate requests to the backend.
  */
 
 const API_BASE = '/api';
+
+/**
+ * Normalizes user preferences specifically to ensure targetRoles and other arrays 
+ * are correctly mapped regardless of database naming convention.
+ */
+const normalizePreferences = (prefs: any): UserPreferences => {
+    if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
+    return {
+        targetRoles: prefs.targetRoles || prefs.target_roles || [],
+        targetLocations: prefs.targetLocations || prefs.target_locations || [],
+        minSalary: prefs.minSalary || prefs.min_salary || '',
+        remoteOnly: !!(prefs.remoteOnly ?? prefs.remote_only ?? false),
+        shareUrl: prefs.shareUrl || prefs.share_url,
+        language: prefs.language || 'en'
+    };
+};
 
 /**
  * Normalizes user profile data from database response to frontend interface.
@@ -21,7 +36,7 @@ const normalizeProfile = (data: any): UserProfile | null => {
         phone: data.phone || '',
         resumeContent: data.resumeContent || data.resume_content || '',
         resumeFileName: data.resumeFileName || data.resume_file_name || '',
-        preferences: data.preferences || { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' },
+        preferences: normalizePreferences(data.preferences),
         onboardedAt: data.onboardedAt || data.created_at || data.onboarded_at || new Date().toISOString(),
         connectedAccounts: data.connectedAccounts || data.connected_accounts || [],
         plan: data.plan || 'free',
@@ -33,19 +48,18 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
     // Explicitly format for the backend to ensure no missing fields or mismatches
     const payload = {
         ...profile,
-        // Backend compatibility mappings
+        // Backend compatibility mappings (Dual mapping for safety)
         full_name: profile.fullName,
         resume_content: profile.resumeContent,
         resume_file_name: profile.resumeFileName,
         connected_accounts: profile.connectedAccounts,
-        // Ensure the preferences object is correctly deep-copied for JSON storage
         preferences: {
             ...profile.preferences,
-            // Mirror camelCase to snake_case just in case the backend DB columns rely on it
             target_roles: profile.preferences.targetRoles,
             target_locations: profile.preferences.targetLocations,
             min_salary: profile.preferences.minSalary,
-            remote_only: profile.preferences.remoteOnly
+            remote_only: profile.preferences.remoteOnly,
+            share_url: profile.preferences.shareUrl
         }
     };
 
@@ -60,7 +74,8 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
     
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to save profile to cloud storage');
+        console.error("Cloud Save Failed:", errorData);
+        throw new Error(errorData.message || 'Failed to save profile to Neon database');
     }
     
     const data = await response.json();
