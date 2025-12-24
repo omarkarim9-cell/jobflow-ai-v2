@@ -1,3 +1,4 @@
+
 {
   "name": "jobflow-ai-pro",
   "private": true,
@@ -14,13 +15,11 @@
     "lucide-react": "^0.460.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "recharts": "^2.13.3"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.1",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
+    "recharts": "^2.13.3",
     "vite": "^5.4.8",
-    "typescript": "^5.5.3"
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1"
   }
 }

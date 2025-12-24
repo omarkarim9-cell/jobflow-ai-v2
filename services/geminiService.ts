@@ -1,18 +1,13 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job, JobStatus } from "../types";
 
 /**
- * Helper to get Gemini AI instance.
- * Always created within the call scope to ensure latest environment variables.
+ * Generates a tailored cover letter using the Gemini model.
  */
-const getAi = () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY is not defined. Ensure it is configured in environment variables.");
-    return new GoogleGenAI({ apiKey });
-};
-
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string) => {
-    const ai = getAi();
+    // Guidelines: Always create a new instance inside the function to ensure current API key usage.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Write a high-impact cover letter for ${title} at ${company}. Name: ${name}, Email: ${email}, Resume: ${resume}`,
@@ -20,11 +15,15 @@ export const generateCoverLetter = async (title: string, company: string, descri
             systemInstruction: "You are an expert career coach writing professional cover letters."
         }
     });
+    // Guidelines: Use .text property, not a method.
     return response.text || "";
 };
 
+/**
+ * Customizes a resume based on the job description.
+ */
 export const customizeResume = async (title: string, company: string, description: string, resume: string, email: string) => {
-    const ai = getAi();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Tailor this resume for ${title} at ${company}. Email: ${email}. Resume: ${resume}`,
@@ -35,8 +34,11 @@ export const customizeResume = async (title: string, company: string, descriptio
     return response.text || "";
 };
 
+/**
+ * Extracts job details from a URL using Google Search grounding.
+ */
 export const extractJobFromUrl = async (url: string): Promise<any> => {
-    const ai = getAi();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Extract full job details from this URL: ${url}. Return as JSON with keys: title, company, location, salaryRange, description, requirements.`,
@@ -52,8 +54,11 @@ export const extractJobFromUrl = async (url: string): Promise<any> => {
     }
 };
 
+/**
+ * Extracts multiple job listings from email HTML.
+ */
 export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Job>[]> => {
-    const ai = getAi();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Extract job postings from this email HTML. Return a JSON array of objects with title, company, location, salaryRange, description, and applicationUrl. HTML: ${html}`,
@@ -90,10 +95,10 @@ export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Jo
  * Available only in Gemini 2.5 series models.
  */
 export const searchNearbyJobs = async (lat: number, lng: number, role: string): Promise<Job[]> => {
-    const ai = getAi();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Find 5 active ${role} job openings near these coordinates: latitude ${lat}, longitude ${lng}. List the results clearly.`,
+        contents: `Find 5 active ${role} job openings near these coordinates: latitude ${lat}, longitude ${lng}.`,
         config: {
             tools: [{ googleMaps: {} }],
             toolConfig: {
@@ -117,7 +122,7 @@ export const searchNearbyJobs = async (lat: number, lng: number, role: string): 
                 title: role,
                 company: chunk.maps.title || 'Nearby Company',
                 location: 'Local Area',
-                description: `Discovered via Google Maps search for ${role} near your current location.`,
+                description: `Found via Google Maps grounding for ${role}.`,
                 source: 'Imported Link',
                 detectedAt: new Date().toISOString(),
                 status: JobStatus.DETECTED,
