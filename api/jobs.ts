@@ -1,10 +1,11 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAuth } from '@clerk/nextjs/server';
 import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL!);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { userId } = getAuth(req);
     if (!userId) {
@@ -12,7 +13,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'GET') {
-      // Fetch all jobs for user
       const result = await sql`
         SELECT * FROM jobs WHERE user_id = ${userId} ORDER BY created_at DESC
       `;
@@ -40,15 +40,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
-      // Save/Update a job
       const body = req.body;
-      
-      // Check if job exists
       const existing = await sql`
         SELECT id FROM jobs WHERE id = ${body.id} AND user_id = ${userId}
       `;
 
-      // Prepare data object for JSONB column
       const jobData = {
         location: body.location || '',
         salaryRange: body.salaryRange || '',
@@ -58,45 +54,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       if (existing.length === 0) {
-        // Insert new job
         const result = await sql`
-          INSERT INTO jobs (
-            id,
-            user_id,
-            title,
-            company,
-            description,
-            status,
-            source,
-            application_url,
-            custom_resume,
-            cover_letter,
-            match_score,
-            data,
-            created_at,
-            updated_at
-          )
-          VALUES (
-            ${body.id},
-            ${userId},
-            ${body.title},
-            ${body.company},
-            ${body.description || ''},
-            ${body.status || 'Detected'},
-            ${body.source || 'Manual'},
-            ${body.applicationUrl || null},
-            ${body.customizedResume || null},
-            ${body.coverLetter || null},
-            ${body.matchScore || 0},
-            ${JSON.stringify(jobData)},
-            NOW(),
-            NOW()
-          )
+          INSERT INTO jobs (id, user_id, title, company, description, status, source, application_url, custom_resume, cover_letter, match_score, data, created_at, updated_at)
+          VALUES (${body.id}, ${userId}, ${body.title}, ${body.company}, ${body.description || ''}, ${body.status || 'Detected'}, ${body.source || 'Manual'}, ${body.applicationUrl || null}, ${body.customizedResume || null}, ${body.coverLetter || null}, ${body.matchScore || 0}, ${JSON.stringify(jobData)}, NOW(), NOW())
           RETURNING *
         `;
         return res.status(200).json({ success: true, job: result[0] });
       } else {
-        // Update existing job
         const result = await sql`
           UPDATE jobs SET
             title = ${body.title},
@@ -118,17 +82,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'DELETE') {
-      // Delete a job - get ID from URL path or query
-      const jobId = req.query.id || req.url?.split('/').pop();
-      
-      if (!jobId) {
-        return res.status(400).json({ error: 'Job ID is required' });
-      }
-
-      await sql`
-        DELETE FROM jobs WHERE id = ${jobId} AND user_id = ${userId}
-      `;
-
+      const jobId = req.query.id;
+      if (!jobId) return res.status(400).json({ error: 'Job ID is required' });
+      await sql`DELETE FROM jobs WHERE id = ${jobId} AND user_id = ${userId}`;
       return res.status(200).json({ success: true });
     }
 

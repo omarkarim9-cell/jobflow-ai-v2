@@ -1,30 +1,22 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAuth } from '@clerk/nextjs/server';
 import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL!);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    // Verify authentication
     const { userId } = getAuth(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     if (req.method === 'GET') {
-      // Fetch user profile
-      const result = await sql`
-        SELECT * FROM profiles WHERE id = ${userId}
-      `;
-      
-      if (result.length === 0) {
-        return res.status(404).json({ error: 'Profile not found' });
-      }
+      const result = await sql`SELECT * FROM profiles WHERE id = ${userId}`;
+      if (result.length === 0) return res.status(404).json({ error: 'Profile not found' });
 
       const profile = result[0];
-      
-      // Normalize database response to match frontend expectations
       return res.status(200).json({
         id: profile.id,
         fullName: profile.full_name,
@@ -41,87 +33,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
-      // Save/Update user profile
       const body = req.body;
-      
-      // Check if profile exists
-      const existing = await sql`
-        SELECT id FROM profiles WHERE id = ${userId}
-      `;
+      const existing = await sql`SELECT id FROM profiles WHERE id = ${userId}`;
 
       if (existing.length === 0) {
-        // Insert new profile
         const result = await sql`
-          INSERT INTO profiles (
-            id, 
-            email, 
-            full_name, 
-            phone,
-            resume_content, 
-            resume_file_name,
-            preferences, 
-            connected_accounts, 
-            plan,
-            updated_at
-          )
-          VALUES (
-            ${userId},
-            ${body.email},
-            ${body.fullName || body.full_name || ''},
-            ${body.phone || ''},
-            ${body.resumeContent || body.resume_content || ''},
-            ${body.resumeFileName || body.resume_file_name || ''},
-            ${JSON.stringify(body.preferences || {})},
-            ${JSON.stringify(body.connectedAccounts || body.connected_accounts || [])},
-            ${body.plan || 'free'},
-            NOW()
-          )
+          INSERT INTO profiles (id, email, full_name, phone, resume_content, resume_file_name, preferences, connected_accounts, plan, updated_at)
+          VALUES (${userId}, ${body.email}, ${body.fullName || ''}, ${body.phone || ''}, ${body.resumeContent || ''}, ${body.resumeFileName || ''}, ${JSON.stringify(body.preferences || {})}, ${JSON.stringify(body.connectedAccounts || [])}, ${body.plan || 'free'}, NOW())
           RETURNING *
         `;
-        
-        const saved = result[0];
-        return res.status(200).json({
-          id: saved.id,
-          fullName: saved.full_name,
-          email: saved.email,
-          phone: saved.phone || '',
-          resumeContent: saved.resume_content,
-          resumeFileName: saved.resume_file_name || '',
-          preferences: saved.preferences,
-          connectedAccounts: saved.connected_accounts || [],
-          plan: saved.plan || 'free',
-          onboardedAt: saved.updated_at
-        });
+        return res.status(200).json(result[0]);
       } else {
-        // Update existing profile
         const result = await sql`
           UPDATE profiles SET
             email = ${body.email},
-            full_name = ${body.fullName || body.full_name || ''},
+            full_name = ${body.fullName || ''},
             phone = ${body.phone || ''},
-            resume_content = ${body.resumeContent || body.resume_content || ''},
-            resume_file_name = ${body.resumeFileName || body.resume_file_name || ''},
+            resume_content = ${body.resumeContent || ''},
+            resume_file_name = ${body.resumeFileName || ''},
             preferences = ${JSON.stringify(body.preferences || {})},
-            connected_accounts = ${JSON.stringify(body.connectedAccounts || body.connected_accounts || [])},
+            connected_accounts = ${JSON.stringify(body.connectedAccounts || [])},
             plan = ${body.plan || 'free'},
             updated_at = NOW()
           WHERE id = ${userId}
           RETURNING *
         `;
-
-        const saved = result[0];
-        return res.status(200).json({
-          id: saved.id,
-          fullName: saved.full_name,
-          email: saved.email,
-          phone: saved.phone || '',
-          resumeContent: saved.resume_content,
-          resumeFileName: saved.resume_file_name || '',
-          preferences: saved.preferences,
-          connectedAccounts: saved.connected_accounts || [],
-          plan: saved.plan || 'free',
-          onboardedAt: saved.updated_at
-        });
+        return res.status(200).json(result[0]);
       }
     }
 

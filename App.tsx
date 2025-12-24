@@ -54,7 +54,6 @@ export const App: React.FC = () => {
   }, []);
 
   const syncData = useCallback(async () => {
-      // Keep loading true while we sync with the database
       setLoading(true);
       try {
           const token = await getToken();
@@ -83,7 +82,6 @@ export const App: React.FC = () => {
       }
   }, [getToken, user, showNotification]);
 
-  // Initial Sync logic: Only run sync if Clerk is loaded and user is signed in
   useEffect(() => {
     if (isLoaded) {
         if (isSignedIn) {
@@ -112,7 +110,7 @@ export const App: React.FC = () => {
     showNotification("Onboarding complete!", "success");
   };
 
-  // Phase 1: Wait for Clerk to resolve auth state
+  // Phase 1: Wait for Clerk
   if (!isLoaded) {
     return (
         <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -121,12 +119,12 @@ export const App: React.FC = () => {
     );
   }
 
-  // Phase 2: If not signed in, show Auth. No other view is possible.
+  // Phase 2: Auth Gate
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
 
-  // Phase 3: If signed in, show sync state until profile is fetched
+  // Phase 3: Sync Gate (Wait for Neon profile)
   if (loading) {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -136,12 +134,11 @@ export const App: React.FC = () => {
     );
   }
 
-  // Phase 4: Onboarding Flow
-  if (currentView === ViewState.ONBOARDING) {
+  // Phase 4: Onboarding Redirect
+  if (currentView === ViewState.ONBOARDING || !userProfile?.onboardedAt) {
     return <Onboarding onComplete={handleOnboardingComplete} onDirHandleChange={() => {}} dirHandle={null} showNotification={showNotification} />;
   }
 
-  // Phase 5: Main Application View
   const currentSelectedJob = jobs.find(j => j.id === selectedJobId);
 
   return (
