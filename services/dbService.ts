@@ -7,20 +7,17 @@ import { Job, UserProfile, UserPreferences } from '../types';
 const API_BASE = '/api';
 
 /**
- * Normalizes user preferences to ensure all potential database naming conventions
- * are correctly mapped to the frontend interface.
+ * Normalizes user preferences to ensure consistency across the platform.
  */
 const normalizePreferences = (prefs: any): UserPreferences => {
     if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
     
     return {
-        targetRoles: Array.isArray(prefs.targetRoles) ? prefs.targetRoles : 
-                     Array.isArray(prefs.target_roles) ? prefs.target_roles : [],
-        targetLocations: Array.isArray(prefs.targetLocations) ? prefs.targetLocations : 
-                         Array.isArray(prefs.target_locations) ? prefs.target_locations : [],
-        minSalary: prefs.minSalary || prefs.min_salary || '',
-        remoteOnly: !!(prefs.remoteOnly ?? prefs.remote_only ?? false),
-        shareUrl: prefs.shareUrl || prefs.share_url,
+        targetRoles: Array.isArray(prefs.targetRoles) ? prefs.targetRoles : [],
+        targetLocations: Array.isArray(prefs.targetLocations) ? prefs.targetLocations : [],
+        minSalary: prefs.minSalary || '',
+        remoteOnly: !!(prefs.remoteOnly || false),
+        shareUrl: prefs.shareUrl,
         language: prefs.language || 'en'
     };
 };
@@ -32,35 +29,31 @@ const normalizeProfile = (data: any): UserProfile | null => {
     if (!data) return null;
     return {
         id: data.id,
-        fullName: data.fullName || data.full_name || '',
+        fullName: data.fullName || '',
         email: data.email || '',
-        password: '',
+        // Fix: Removed password field as it is not present in UserProfile type
         phone: data.phone || '',
-        resumeContent: data.resumeContent || data.resume_content || '',
-        resumeFileName: data.resumeFileName || data.resume_file_name || '',
+        resumeContent: data.resumeContent || '',
+        resumeFileName: data.resumeFileName || '',
         preferences: normalizePreferences(data.preferences),
-        onboardedAt: data.onboardedAt || data.created_at || data.onboarded_at || new Date().toISOString(),
-        connectedAccounts: data.connectedAccounts || data.connected_accounts || [],
+        onboardedAt: data.onboardedAt || new Date().toISOString(),
+        connectedAccounts: data.connectedAccounts || [],
         plan: data.plan || 'free',
-        subscriptionExpiry: data.subscriptionExpiry || data.subscription_expiry
+        subscriptionExpiry: data.subscriptionExpiry
     };
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
+    // Construct payload explicitly mapping camelCase frontend fields to what the API POST expects
     const payload = {
-        id: profile.id,
         fullName: profile.fullName,
-        full_name: profile.fullName,
         email: profile.email,
         phone: profile.phone,
         resumeContent: profile.resumeContent,
-        resume_content: profile.resumeContent,
         resumeFileName: profile.resumeFileName,
-        resume_file_name: profile.resumeFileName,
-        connectedAccounts: profile.connectedAccounts || [],
-        connected_accounts: profile.connectedAccounts || [],
-        plan: profile.plan || 'free',
-        preferences: profile.preferences
+        preferences: profile.preferences,
+        connectedAccounts: profile.connectedAccounts,
+        plan: profile.plan || 'free'
     };
 
     try {
@@ -73,14 +66,9 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
             body: JSON.stringify(payload)
         });
         
-        if (response.status === 404) {
-            console.error("[JobFlow DB] API Endpoint /api/profile not found (404). Check deployment status.");
-            throw new Error("Cloud storage endpoint missing. Saving locally for now.");
-        }
-
         if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(`Sync failed (${response.status}): ${errorBody}`);
+            throw new Error(`Profile sync failed (${response.status}): ${errorBody}`);
         }
         
         const data = await response.json();
@@ -103,7 +91,7 @@ export const getUserProfile = async (clerkToken: string): Promise<UserProfile | 
         const data = await response.json();
         return normalizeProfile(data);
     } catch (e) {
-        console.warn("[JobFlow DB] Get profile failed, using local fallback.");
+        console.warn("[JobFlow DB] Get profile failed.");
         return null;
     }
 };
@@ -119,13 +107,14 @@ export const fetchJobsFromDb = async (clerkToken: string): Promise<Job[]> => {
         const data = await response.json();
         return data.jobs || [];
     } catch (e) {
+        console.warn("[JobFlow DB] Fetch jobs failed.");
         return [];
     }
 };
 
 export const saveJobToDb = async (job: Job, clerkToken: string) => {
     try {
-        await fetch(`${API_BASE}/jobs`, {
+        const response = await fetch(`${API_BASE}/jobs`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -133,6 +122,9 @@ export const saveJobToDb = async (job: Job, clerkToken: string) => {
             },
             body: JSON.stringify(job)
         });
+        if (!response.ok) {
+            console.error("[JobFlow DB] Job save status error:", response.status);
+        }
     } catch (e) {
         console.warn("[JobFlow DB] Save job failed.");
     }
@@ -140,7 +132,8 @@ export const saveJobToDb = async (job: Job, clerkToken: string) => {
 
 export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
     try {
-        await fetch(`${API_BASE}/jobs/${jobId}`, {
+        // Send as query param to match API handler flexibility
+        await fetch(`${API_BASE}/jobs?id=${jobId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${clerkToken}`

@@ -75,7 +75,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onDirHandleC
             id: user!.id,
             fullName: formData.fullName,
             email: user!.primaryEmailAddress?.emailAddress || '',
-            password: '',
+            // Fix: Removed password field as it is not present in UserProfile type
             phone: formData.phone,
             resumeContent: formData.resumeContent,
             resumeFileName: formData.resumeFileName,

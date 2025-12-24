@@ -1,5 +1,4 @@
 
-
 export enum JobStatus {
   DETECTED = 'Detected', // Found in email
   REVIEW = 'In Review', // User looking at it
@@ -13,8 +12,8 @@ export enum JobStatus {
 
 export enum ViewState {
   DASHBOARD = 'DASHBOARD',
-  SELECTED_JOBS = 'SELECTED_JOBS', // Now primarily "Scanned Jobs"
-  TRACKER = 'TRACKER', // New "My Applications"
+  SELECTED_JOBS = 'SELECTED_JOBS', 
+  TRACKER = 'TRACKER', 
   EMAILS = 'EMAILS',
   ANALYTICS = 'ANALYTICS',
   SETTINGS = 'SETTINGS',
@@ -22,7 +21,8 @@ export enum ViewState {
   SUPPORT = 'SUPPORT',
   SUBSCRIPTION = 'SUBSCRIPTION',
   REVIEW_SELECTION = 'REVIEW_SELECTION',
-  GENERATED_JOBS_LIST = 'GENERATED_JOBS_LIST'
+  GENERATED_JOBS_LIST = 'GENERATED_JOBS_LIST',
+  ONBOARDING = 'ONBOARDING'
 }
 
 export interface Job {
@@ -33,23 +33,15 @@ export interface Job {
   salaryRange?: string;
   description: string;
   source: 'Gmail' | 'LinkedIn' | 'Indeed' | 'Imported Link';
-  detectedAt: string; // ISO Date
+  detectedAt: string; 
   status: JobStatus;
-  matchScore: number; // 0-100
+  matchScore: number; 
   requirements: string[];
   coverLetter?: string;
-  customizedResume?: string; // AI Rewritten resume specific to this job
+  customizedResume?: string; 
   notes?: string;
   logoUrl?: string;
   applicationUrl?: string;
-}
-
-export interface UserStats {
-  totalDetected: number;
-  autoApplied: number;
-  manualRequired: number;
-  interviews: number;
-  successRate: number;
 }
 
 export interface UserPreferences {
@@ -57,8 +49,8 @@ export interface UserPreferences {
   targetLocations: string[];
   minSalary: string;
   remoteOnly: boolean;
-  shareUrl?: string; // URL for marketing ads
-  language: 'en' | 'es' | 'fr' | 'de' | 'ar'; // Added Arabic
+  shareUrl?: string; 
+  language: 'en' | 'es' | 'fr' | 'de' | 'ar';
 }
 
 export interface EmailAccount {
@@ -72,23 +64,21 @@ export interface EmailAccount {
 }
 
 export interface UserProfile {
-  id: string; // Unique ID based on email
+  id: string; 
   fullName: string;
-  email: string; // Main profile email
-  password?: string; // Encrypted (simulated) password
+  email: string; 
+  avatarUrl?: string;
   phone: string;
-  resumeContent: string; // The raw text of the master resume for AI
+  resumeContent: string; 
   resumeFileName?: string;
   preferences: UserPreferences;
-  onboardedAt: string;
+  onboardedAt: string | null;
   connectedAccounts: EmailAccount[];
   plan: 'free' | 'pro';
   subscriptionExpiry?: string;
 }
 
-// --- UTILITY: Central Subscription Check ---
 export const isSubscriptionValid = (profile: UserProfile | null): boolean => {
   if (!profile) return false;
-  // Unlocked: All users (Free & Pro) have access to AI features
   return true;
 };

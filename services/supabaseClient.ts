@@ -226,8 +226,8 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
         id: data.id,
         fullName: data.full_name,
         email: data.email,
-        password: '',
-        phone: '',
+        // Fix: Removed password field as it is not present in UserProfile type
+        phone: data.phone || '',
         resumeContent: data.resume_content || '',
         resumeFileName: '',
         preferences: data.preferences || {},
