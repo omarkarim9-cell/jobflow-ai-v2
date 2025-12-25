@@ -1,20 +1,66 @@
-
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAuth } from '@clerk/nextjs/server';
 import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL!);
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// Extract userId from Clerk session token
+async function getUserIdFromClerkToken(req: VercelRequest): Promise<string | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  
+  const token = authHeader.substring(7);
+  
   try {
-    const { userId } = getAuth(req);
+    // Verify with Clerk API
+    const response = await fetch('https://api.clerk.com/v1/sessions/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ token })
+    });
+    
+    if (!response.ok) {
+      console.error('Clerk verification failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.user_id || data.sub || null;
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return null;
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  try {
+    const userId = await getUserIdFromClerkToken(req);
+    
     if (!userId) {
+      console.error('No userId found in token');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     if (req.method === 'GET') {
       const result = await sql`SELECT * FROM profiles WHERE id = ${userId}`;
-      if (result.length === 0) return res.status(404).json({ error: 'Profile not found' });
+      
+      if (result.length === 0) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
 
       const profile = result[0];
       return res.status(200).json({
@@ -37,28 +83,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const existing = await sql`SELECT id FROM profiles WHERE id = ${userId}`;
 
       if (existing.length === 0) {
+        // INSERT - Create new profile
         const result = await sql`
-          INSERT INTO profiles (id, email, full_name, phone, resume_content, resume_file_name, preferences, connected_accounts, plan, updated_at)
-          VALUES (${userId}, ${body.email}, ${body.fullName || ''}, ${body.phone || ''}, ${body.resumeContent || ''}, ${body.resumeFileName || ''}, ${JSON.stringify(body.preferences || {})}, ${JSON.stringify(body.connectedAccounts || [])}, ${body.plan || 'free'}, NOW())
+          INSERT INTO profiles (
+            id, 
+            email, 
+            full_name, 
+            phone, 
+            resume_content, 
+            resume_file_name, 
+            preferences, 
+            connected_accounts, 
+            plan, 
+            updated_at
+          )
+          VALUES (
+            ${userId}, 
+            ${body.email}, 
+            ${body.fullName || body.full_name || ''}, 
+            ${body.phone || ''}, 
+            ${body.resumeContent || body.resume_content || ''}, 
+            ${body.resumeFileName || body.resume_file_name || ''}, 
+            ${JSON.stringify(body.preferences || {})}, 
+            ${JSON.stringify(body.connectedAccounts || body.connected_accounts || [])}, 
+            ${body.plan || 'free'}, 
+            NOW()
+          )
           RETURNING *
         `;
-        return res.status(200).json(result[0]);
+        
+        const saved = result[0];
+        return res.status(200).json({
+          id: saved.id,
+          fullName: saved.full_name,
+          email: saved.email,
+          phone: saved.phone || '',
+          resumeContent: saved.resume_content,
+          resumeFileName: saved.resume_file_name || '',
+          preferences: saved.preferences,
+          connectedAccounts: saved.connected_accounts || [],
+          plan: saved.plan || 'free',
+          onboardedAt: saved.updated_at
+        });
       } else {
+        // UPDATE - Update existing profile
         const result = await sql`
           UPDATE profiles SET
             email = ${body.email},
-            full_name = ${body.fullName || ''},
+            full_name = ${body.fullName || body.full_name || ''},
             phone = ${body.phone || ''},
-            resume_content = ${body.resumeContent || ''},
-            resume_file_name = ${body.resumeFileName || ''},
+            resume_content = ${body.resumeContent || body.resume_content || ''},
+            resume_file_name = ${body.resumeFileName || body.resume_file_name || ''},
             preferences = ${JSON.stringify(body.preferences || {})},
-            connected_accounts = ${JSON.stringify(body.connectedAccounts || [])},
+            connected_accounts = ${JSON.stringify(body.connectedAccounts || body.connected_accounts || [])},
             plan = ${body.plan || 'free'},
             updated_at = NOW()
           WHERE id = ${userId}
           RETURNING *
         `;
-        return res.status(200).json(result[0]);
+
+        const saved = result[0];
+        return res.status(200).json({
+          id: saved.id,
+          fullName: saved.full_name,
+          email: saved.email,
+          phone: saved.phone || '',
+          resumeContent: saved.resume_content,
+          resumeFileName: saved.resume_file_name || '',
+          preferences: saved.preferences,
+          connectedAccounts: saved.connected_accounts || [],
+          plan: saved.plan || 'free',
+          onboardedAt: saved.updated_at
+        });
       }
     }
 
