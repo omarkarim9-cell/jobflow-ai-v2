@@ -1,7 +1,8 @@
+
 {
-  "name": "JobFlow AI Pro v3.1",
-  "description": "Migrated to a new version to use neon, clerk, and vercel ",
+  "name": "JobFlow AI Pro v3.2",
+  "description": "Professional Job Search Automation Platform with Gemini 3 Pro Integration",
   "requestFramePermissions": [
-    "camera"
+    "geolocation"
   ]
 }

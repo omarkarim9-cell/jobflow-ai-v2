@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
-import { Zap, RefreshCcw, AlertCircle, ExternalLink } from 'lucide-react';
+import { Zap, RefreshCcw, AlertCircle } from 'lucide-react';
+import './index.css';
 
 /**
  * Enhanced Environment Variable Detection
@@ -35,8 +37,8 @@ if (typeof window !== 'undefined') {
 const ConfigurationGuard: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     
-    // Relaxed check to ensure the app starts even with shorter development keys
-    const isConfigured = (CLERK_KEY?.length > 10) && (GEMINI_KEY?.length > 10);
+    // Access key validation
+    const isConfigured = (CLERK_KEY?.length > 10);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
@@ -51,26 +53,15 @@ const ConfigurationGuard: React.FC = () => {
                         <Zap className="w-10 h-10" />
                     </div>
                     
-                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">Connection Required</h1>
+                    <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight text-center">Cloud Access Required</h1>
                     <p className="text-slate-500 mb-8 text-center leading-relaxed text-sm">
-                        To run the platform, your secure access keys must be configured in the environment.
+                        To run the platform, your Clerk Publishable Key must be configured in your environment variables.
                     </p>
                     
-                    <div className="space-y-3 mb-8">
-                        <div className={`p-4 rounded-2xl border flex items-center justify-between ${CLERK_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                            <span className="text-xs font-bold uppercase tracking-widest">Identity Service</span>
-                            {CLERK_KEY ? <span className="text-[10px] font-black uppercase">Linked</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
-                        </div>
-                        <div className={`p-4 rounded-2xl border flex items-center justify-between ${GEMINI_KEY ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                            <span className="text-xs font-bold uppercase tracking-widest">Intelligence Service</span>
-                            {GEMINI_KEY ? <span className="text-[10px] font-black uppercase">Linked</span> : <span className="text-[10px] font-black uppercase">Missing</span>}
-                        </div>
-                    </div>
-
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8 flex gap-4">
                         <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
                         <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                            <strong>Note:</strong> Configuration changes require a <strong>Platform Refresh</strong> to take effect in your session.
+                            <strong>Configuration Required:</strong> Ensure VITE_CLERK_PUBLISHABLE_KEY is set in your environment.
                         </p>
                     </div>
 
@@ -80,15 +71,8 @@ const ConfigurationGuard: React.FC = () => {
                             className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                         >
                             <RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            Refresh Platform
+                            Retry Initialization
                         </button>
-                        <a 
-                            href="https://vercel.com/dashboard" 
-                            target="_blank" 
-                            className="p-4 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all"
-                        >
-                            <ExternalLink className="w-5 h-5" />
-                        </a>
                     </div>
                 </div>
             </div>
