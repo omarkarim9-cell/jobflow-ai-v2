@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job, JobStatus } from "../types";
 
@@ -6,7 +5,6 @@ import { Job, JobStatus } from "../types";
  * Generates a tailored cover letter using the Gemini model.
  */
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string) => {
-    // Guidelines: Always create a new instance inside the function to ensure current API key usage.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -15,7 +13,6 @@ export const generateCoverLetter = async (title: string, company: string, descri
             systemInstruction: "You are an expert career coach writing professional cover letters."
         }
     });
-    // Guidelines: Use .text property, not a method.
     return response.text || "";
 };
 
@@ -37,7 +34,7 @@ export const customizeResume = async (title: string, company: string, descriptio
 /**
  * Extracts job details from a URL using Google Search grounding.
  */
-export const extractJobFromUrl = async (url: string): Promise<any> => {
+export const extractJobFromUrl = async (url: string): Promise<{data: any, sources: any[]}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -46,11 +43,19 @@ export const extractJobFromUrl = async (url: string): Promise<any> => {
     });
     
     const text = response.text || "";
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    
     try {
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Extracted Role', company: 'Check Site', description: text };
+        return {
+            data: jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Extracted Role', company: 'Check Site', description: text },
+            sources
+        };
     } catch (e) {
-        return { title: 'Extracted Role', company: 'Check Site', description: text };
+        return {
+            data: { title: 'Extracted Role', company: 'Check Site', description: text },
+            sources
+        };
     }
 };
 
@@ -139,3 +144,4 @@ export const searchNearbyJobs = async (lat: number, lng: number, role: string): 
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
     return url;
 };
+
