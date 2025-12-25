@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity, Search } from 'lucide-react';
+import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity, Search, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { translations } from '../services/localization';
 
@@ -59,21 +60,38 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* System Health Header */}
-      <div className="flex items-center justify-between bg-indigo-900 text-white p-4 rounded-2xl shadow-xl shadow-indigo-900/20 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-          <div className="flex items-center gap-4 relative z-10">
-              <div className="w-10 h-10 bg-indigo-500/30 rounded-xl flex items-center justify-center border border-white/10">
-                  <Activity className="w-5 h-5 text-indigo-300 animate-pulse" />
-              </div>
-              <div>
-                  <h2 className="text-sm font-bold tracking-tight">System Status: Active</h2>
-                  <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Automation Services Online</p>
-              </div>
-          </div>
-          <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 relative z-10">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Encrypted Session</span>
-          </div>
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex-1 flex items-center justify-between bg-indigo-900 text-white p-4 rounded-2xl shadow-xl shadow-indigo-900/20 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+            <div className="flex items-center gap-4 relative z-10">
+                <div className="w-10 h-10 bg-indigo-500/30 rounded-xl flex items-center justify-center border border-white/10">
+                    <Activity className="w-5 h-5 text-indigo-300 animate-pulse" />
+                </div>
+                <div>
+                    <h2 className="text-sm font-bold tracking-tight">System Status: Active</h2>
+                    <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Automation Services Online</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 relative z-10">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Encrypted Session</span>
+            </div>
+        </div>
+
+        {/* Configuration Reminder Banner */}
+        <div className="flex-1 bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-4 shadow-sm">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
+                <SettingsIcon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+                <h3 className="text-xs font-black text-amber-900 uppercase tracking-tight flex items-center">
+                    <AlertCircle className="w-3 h-3 mr-1" /> Profile Sync Required
+                </h3>
+                <p className="text-[10px] text-amber-700 font-medium leading-relaxed mt-0.5">
+                    Verify your <strong>Target Roles</strong> and <strong>Master Resume</strong> in Settings to optimize AI job extraction.
+                </p>
+            </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
