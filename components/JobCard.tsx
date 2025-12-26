@@ -84,7 +84,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
                 <button 
                   onClick={handleApply}
                   className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors"
-                  title="Open Job Link"
+                  title="Open Source Link"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </button>
@@ -110,9 +110,9 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
 
       <div className="mt-5 flex items-center justify-between ms-9">
          <div className="flex items-center gap-1.5">
-            <div className="text-[10px] font-black text-slate-300 uppercase">Match:</div>
+            <div className="text-[10px] font-black text-slate-300 uppercase">Analysis:</div>
             <div className={`text-xs font-black ${job.matchScore > 80 ? 'text-green-600' : 'text-amber-600'}`}>
-              {job.matchScore}%
+              {job.matchScore}% Fit
             </div>
          </div>
          
@@ -122,15 +122,15 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
                     <button 
                         onClick={(e) => handleDownload(e, job.customizedResume!, `${job.company}_Resume.txt`)}
                         className="text-[10px] font-black uppercase tracking-wider bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
-                        title="Download Tailored Resume"
+                        title="Export Tailored Resume"
                     >
                         <FileText className="w-3.5 h-3.5" />
                     </button>
                     {letterReady && (
                         <button 
-                            onClick={(e) => handleDownload(e, job.coverLetter!, `${job.company}_CoverLetter.txt`)}
+                            onClick={(e) => handleDownload(e, job.coverLetter!, `${job.company}_Letter.txt`)}
                             className="text-[10px] font-black uppercase tracking-wider bg-white text-purple-600 hover:bg-purple-50 border border-purple-200 px-2.5 py-1.5 rounded-xl flex items-center transition-all shadow-sm"
-                            title="Download Cover Letter"
+                            title="Export Cover Letter"
                         >
                             <StickyNote className="w-3.5 h-3.5" />
                         </button>
@@ -139,7 +139,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
                         onClick={() => onClick(job)}
                         className="text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded-xl border border-indigo-600 flex items-center transition-all shadow-md shadow-indigo-100"
                     >
-                        Preview <Eye className="w-3.5 h-3.5 ms-2" />
+                        Review <Eye className="w-3.5 h-3.5 ms-2" />
                     </button>
                 </div>
             ) : (
@@ -148,14 +148,14 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
                     onClick={() => onClick(job)}
                     className="text-[10px] font-black uppercase tracking-wider bg-white text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 flex items-center transition-all"
                   >
-                    Preview
+                    Details
                   </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); onAutoApply(e, job); }}
                     className="text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl border border-indigo-600 flex items-center transition-all shadow-lg shadow-indigo-100"
                   >
                     <Sparkles className="w-3.5 h-3.5 me-2" />
-                    AI Assets
+                    Tailor Profile
                   </button>
                 </div>
             )}

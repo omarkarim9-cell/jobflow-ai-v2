@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -5,9 +6,6 @@ import { DashboardStats } from './DashboardStats';
 import { JobCard } from './JobCard';
 import { InboxScanner } from './InboxScanner';
 import { Settings } from './Settings';
-import { UserManual } from './UserManual';
-import { Subscription } from './Subscription';
-import { Support } from './Support';
 import { Auth } from './Auth';
 import { Onboarding } from './Onboarding';
 import { ApplicationTracker } from './ApplicationTracker';
@@ -125,7 +123,7 @@ export const App: React.FC = () => {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2"/>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Identity...</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Authenticating...</p>
         </div>
     );
   }
@@ -181,18 +179,18 @@ export const App: React.FC = () => {
         {currentView === ViewState.SELECTED_JOBS && (
           <div className="h-full overflow-y-auto p-8">
             <div className="flex justify-between items-center mb-8">
-               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Opportunities</h2>
+               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Lead Discovery</h2>
                <button 
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all"
                >
-                 <Plus className="w-4 h-4" /> Add Manual Lead
+                 <Plus className="w-4 h-4" /> Add Job Manually
                </button>
             </div>
             {jobs.filter(j => j.status === JobStatus.DETECTED).length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
                 <SearchIcon className="w-10 h-10 mb-4 opacity-20" />
-                <p className="font-bold text-xs uppercase tracking-widest">No jobs scanned yet. Run the Inbox Scanner.</p>
+                <p className="font-bold text-xs uppercase tracking-widest text-center">No leads found in inbox.<br/>Use the Inbox Scanner or add manually.</p>
               </div>
             ) : (
               jobs.filter(j => j.status === JobStatus.DETECTED).map(j => (
@@ -222,7 +220,6 @@ export const App: React.FC = () => {
         {currentView === ViewState.SETTINGS && (
           <div className="h-full p-8 overflow-y-auto">
             <Settings 
-              key={userProfile?.id || 'settings'} 
               userProfile={userProfile!} 
               onUpdate={handleUpdateProfile} 
               dirHandle={null} 
@@ -258,7 +255,7 @@ export const App: React.FC = () => {
                 <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button onClick={() => setSelectedJobId(null)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button> 
-                        <span className="text-sm font-bold text-slate-400">/ {currentSelectedJob.company}</span>
+                        <span className="text-sm font-bold text-slate-400">/ Viewing {currentSelectedJob.company}</span>
                     </div>
                     <div className="flex items-center gap-2">
                          <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${currentSelectedJob.status === JobStatus.DETECTED ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
