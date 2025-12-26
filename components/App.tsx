@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -254,6 +253,23 @@ export const App: React.FC = () => {
               jobs={jobs} 
               showNotification={showNotification} 
               onReset={() => signOut()} 
+            />
+          </div>
+        )}
+        
+        {currentView === ViewState.EMAILS && (
+          <div className="h-full p-6">
+            <InboxScanner 
+              onImport={async (newJobs) => {
+                  setJobs(prev => [...newJobs, ...prev]);
+                  const token = await getToken();
+                  if (token) for (const j of newJobs) await saveJobToDb(j, token);
+              }} 
+              sessionAccount={sessionAccount} 
+              onConnectSession={setSessionAccount} 
+              onDisconnectSession={() => setSessionAccount(null)} 
+              showNotification={showNotification} 
+              userPreferences={userProfile?.preferences} 
             />
           </div>
         )}
