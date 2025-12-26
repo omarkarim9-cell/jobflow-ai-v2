@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -28,7 +29,6 @@ import {
   List,
   LogOut,
   X,
-  Terminal,
   Plus,
   AlertCircle
 } from 'lucide-react';
@@ -65,7 +65,6 @@ export const App: React.FC = () => {
 
           let profile = await getUserProfile(token);
           
-          // Auto-initialize profile if missing, instead of forcing onboarding view
           if (!profile && user) {
               profile = {
                   id: user.id,
@@ -174,7 +173,6 @@ export const App: React.FC = () => {
           <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><Mail className="w-5 h-5 me-3" /> Inbox Scanner</button>
           <div className="my-2 border-t border-slate-100" />
           <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><SettingsIcon className="w-5 h-5 me-3" /> Settings</button>
-          <button onClick={() => setCurrentView(ViewState.DEBUG)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.DEBUG ? 'bg-slate-900 text-white font-bold shadow-sm' : 'text-slate-400 hover:bg-slate-50'}`}><Terminal className="w-5 h-5 me-3" /> Debug Console</button>
         </div>
         <div className="p-4 border-t border-slate-200 mt-auto"><button onClick={() => signOut()} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-600 transition-colors font-bold text-xs uppercase tracking-widest"><LogOut className="w-4 h-4 me-3" /> Sign Out</button></div>
       </aside>

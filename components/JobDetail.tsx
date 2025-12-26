@@ -34,8 +34,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
   };
 
   const handleGenerateDocuments = async () => {
-    if (!userProfile.resumeContent || userProfile.resumeContent.length < 20) {
-        notify("Please upload your master resume in Settings first.", "error");
+    if (!userProfile.resumeContent || userProfile.resumeContent.length < 50) {
+        notify("Please update your master resume in Settings first (minimum 50 chars).", "error");
         return;
     }
     
@@ -43,21 +43,24 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     notify(`AI is generating tailored documents for ${job.company}...`, 'success');
     
     try {
-        const finalResume = await customizeResume(job.title, job.company, job.description, userProfile.resumeContent, userProfile.email);
-        const finalLetter = await generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email);
+        // Parallel generation for speed
+        const [finalResume, finalLetter] = await Promise.all([
+            customizeResume(job.title, job.company, job.description, userProfile.resumeContent, userProfile.email),
+            generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
+        ]);
         
         const updatedJob = { 
             ...job, 
-            customizedResume: finalResume, 
-            coverLetter: finalLetter, 
+            customizedResume: finalResume || "Failed to generate resume text.", 
+            coverLetter: finalLetter || "Failed to generate cover letter text.", 
             status: JobStatus.SAVED 
         };
         
         onUpdateJob(updatedJob);
         notify("Assets generated successfully!", "success");
     } catch (e) {
-        console.error(e);
-        notify("Generation failed. Please check your API key.", "error");
+        console.error("Generation error in JobDetail:", e);
+        notify("Generation failed. Please verify your API Key in environment.", "error");
     } finally {
         setIsGenerating(false);
     }
@@ -104,7 +107,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                   className="w-full md:w-56 bg-indigo-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-indigo-100"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} 
-                  {job.customizedResume ? 'Regenerate Documents' : 'Generate Assets'}
+                  {job.customizedResume ? 'Regenerate Assets' : 'Generate Assets'}
                 </button>
             </div>
         </div>
