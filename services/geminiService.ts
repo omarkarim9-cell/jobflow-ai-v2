@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Job, JobStatus } from "../types";
 
 /**
@@ -59,15 +59,14 @@ export const customizeResume = async (title: string, company: string, descriptio
 };
 
 /**
- * Extracts job details from a URL.
- * Switched to Flash for faster manual extraction reliability.
+ * Extracts job details from a URL using Gemini 3 Pro with Thinking and Google Search for maximum accuracy.
  */
 export const extractJobFromUrl = async (url: string): Promise<{data: any, sources: any[]}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3-pro-preview',
             contents: `Analyze the job posting at this URL: ${url}. 
             
             TASK:
@@ -75,7 +74,7 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
             
             CRITICAL REQUIREMENT: 
             You MUST identify the actual hiring company name. Do not return "Review Required" or "Unknown". 
-            If the page is a job board (LinkedIn/Indeed), scan the text for phrases like "About [Company Name]" or "[Company Name] is hiring".
+            Use your search tools to verify the company if the URL is from a job board like LinkedIn, Indeed, or Wuzzuf.
 
             Fields to extract:
             - title
@@ -86,6 +85,8 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
 
             Return ONLY the JSON object.`,
             config: { 
+                thinkingConfig: { thinkingBudget: 4000 },
+                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -111,7 +112,7 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
             data.company = companyMatch ? companyMatch[1] : "Hiring Team";
         }
 
-        return { data, sources: [] };
+        return { data, sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
     } catch (e) {
         console.error("Gemini extraction failed", e);
         // Fallback object to ensure the modal doesn't crash
