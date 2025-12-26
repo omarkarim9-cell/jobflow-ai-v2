@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Job, JobStatus } from "../types";
 
 /**
@@ -7,22 +6,24 @@ import { Job, JobStatus } from "../types";
  */
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const targetCompany = (company === "Review Required" || !company) ? "the Hiring Manager" : company;
+    
+    const isPlaceholder = !company || company === "Review Required" || company === "Unknown";
     
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Write a high-impact cover letter for the ${title} position at ${targetCompany}.
+        contents: `Write a high-impact cover letter for the ${title} position.
         
         Details:
+        - Company: ${isPlaceholder ? 'Carefully analyze the job description below to identify the real company name. Use it if found, otherwise use "Hiring Manager".' : company}
         - Candidate Name: ${name}
-        - Email: ${email}
-        - Original Resume: ${resume}
+        - Candidate Email: ${email}
         - Job Description: ${description}
+        - Original Resume: ${resume}
         
         Instructions:
-        - Ensure the tone is professional yet enthusiastic.
-        - Address the letter specifically to ${targetCompany}.
-        - Highlight skills from the resume that match the job description.`,
+        - ADDRESS THE LETTER TO THE SPECIFIC COMPANY IF FOUND.
+        - NEVER use the phrase "Review Required" or "Unknown" in the final text.
+        - Highlight matching skills from the resume and description.`,
         config: {
             systemInstruction: "You are an expert career coach writing professional, high-conversion cover letters."
         }
@@ -42,7 +43,7 @@ export const customizeResume = async (title: string, company: string, descriptio
         Original Resume: ${resume}
         Job Description: ${description}`,
         config: {
-            systemInstruction: "You are a professional resume writer specializing in ATS optimization. Rewrite bullet points to emphasize relevant experience for the specific role."
+            systemInstruction: "You are a professional resume writer specializing in ATS optimization. Rewrite bullet points to emphasize relevant experience for the specific role. Ensure the company name is utilized if available."
         }
     });
     return response.text || "";
@@ -50,7 +51,7 @@ export const customizeResume = async (title: string, company: string, descriptio
 
 /**
  * Extracts job details from a URL using Google Search grounding.
- * Upgraded to Gemini 3 Pro for superior reasoning over search snippets.
+ * Upgraded to Gemini 3 Pro for superior reasoning.
  */
 export const extractJobFromUrl = async (url: string): Promise<{data: any, sources: any[]}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -60,15 +61,15 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
         
         TASK:
         Extract the following details as a clean JSON object. 
-        CRITICAL: If you cannot find the company name directly on the page, use Google Search to identify the company hosting this job link. NEVER return "Review Required" if search can find it.
+        CRITICAL: Finding the company name is mandatory. Use Google Search grounding to identify exactly which company is hosting this job if it's not clear on the page.
+        DO NOT return "Review Required" as a company name. Find the actual name.
 
         Fields:
         - title (The official job title)
-        - company (The specific hiring company name)
+        - company (The hiring company name)
         - location (City, State or Remote)
-        - salaryRange (The salary if mentioned)
-        - description (A summary of the role)
-        - requirements (A comma-separated string of key skills)
+        - description (Full job description)
+        - requirements (Comma-separated key skills)
 
         Return ONLY the JSON object.`,
         config: { 
@@ -84,17 +85,11 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
         const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
         const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
         
-        if (!parsed) {
-             return {
-                data: { title: 'Extracted Role', company: 'Check Site', description: text },
-                sources
-            };
+        if (!parsed || !parsed.title) {
+             throw new Error("Invalid extraction result");
         }
 
-        return {
-            data: parsed,
-            sources
-        };
+        return { data: parsed, sources };
     } catch (e) {
         console.error("Gemini extraction parsing failed", e);
         return {
@@ -141,6 +136,20 @@ export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Jo
 };
 
 /**
+ * Processes a job URL to ensure it's a direct application link by cleaning tracking parameters.
+ */
+export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
+    try {
+        const u = new URL(url);
+        const paramsToRemove = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'source', 'click_id', 'gclid'];
+        paramsToRemove.forEach(p => u.searchParams.delete(p));
+        return u.toString();
+    } catch (e) {
+        return url;
+    }
+};
+
+/**
  * Searches for nearby jobs using Google Maps grounding.
  */
 export const searchNearbyJobs = async (lat: number, lng: number, role: string): Promise<Job[]> => {
@@ -183,8 +192,4 @@ export const searchNearbyJobs = async (lat: number, lng: number, role: string): 
     });
 
     return jobs;
-};
-
-export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
-    return url;
 };

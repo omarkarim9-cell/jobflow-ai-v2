@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -13,6 +12,7 @@ import { Auth } from './Auth';
 import { Onboarding } from './Onboarding';
 import { ApplicationTracker } from './ApplicationTracker';
 import { DebugView } from './DebugView';
+import { AddJobModal } from './AddJobModal';
 import { NotificationToast, NotificationType } from './NotificationToast';
 import { LanguageCode } from '../services/localization';
 import { 
@@ -32,7 +32,8 @@ import {
   List,
   LogOut,
   X,
-  Terminal
+  Terminal,
+  Plus
 } from 'lucide-react';
 import { JobDetail } from './JobDetail';
 
@@ -47,6 +48,7 @@ export const App: React.FC = () => {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [sessionAccount, setSessionAccount] = useState<EmailAccount | null>(null);
   const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const lang = (userProfile?.preferences?.language as LanguageCode) || 'en';
   const isRtl = lang === 'ar';
@@ -64,7 +66,6 @@ export const App: React.FC = () => {
               return; 
           }
 
-          // Fetch profile with fallback built into service
           const profile = await getUserProfile(token);
           
           if (!profile && user) {
@@ -75,7 +76,6 @@ export const App: React.FC = () => {
           
           setUserProfile(profile);
 
-          // Fetch jobs with fallback built into service
           const dbJobs = await fetchJobsFromDb(token);
           setJobs(dbJobs);
       } catch (e) {
@@ -108,13 +108,19 @@ export const App: React.FC = () => {
     if (token) await saveJobToDb(updated, token);
   };
 
+  const handleAddJob = async (job: Job) => {
+    setJobs(prev => [job, ...prev]);
+    const token = await getToken();
+    if (token) await saveJobToDb(job, token);
+    showNotification("Job lead added successfully!", "success");
+  };
+
   const handleOnboardingComplete = (profile: UserProfile) => {
     setUserProfile(profile);
     setCurrentView(ViewState.DASHBOARD);
     showNotification("Onboarding complete!", "success");
   };
 
-  // 1. Clerk Identity Check
   if (!isLoaded) {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -124,12 +130,10 @@ export const App: React.FC = () => {
     );
   }
 
-  // 2. Auth Gate
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
 
-  // 3. Data Loading Gate
   if (loading && !userProfile) {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -139,17 +143,18 @@ export const App: React.FC = () => {
     );
   }
 
-  // 4. Onboarding Gate
   if (currentView === ViewState.ONBOARDING || !userProfile?.onboardedAt) {
     return <Onboarding onComplete={handleOnboardingComplete} onDirHandleChange={() => {}} dirHandle={null} showNotification={showNotification} />;
   }
 
-  // 5. Main App
   const currentSelectedJob = jobs.find(j => j.id === selectedJobId);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
       {notification && <NotificationToast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
+      
+      <AddJobModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={handleAddJob} />
+
       <aside className="w-64 bg-white border-e border-slate-200 flex flex-col shrink-0 z-20">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -169,9 +174,42 @@ export const App: React.FC = () => {
         </div>
         <div className="p-4 border-t border-slate-200 mt-auto"><button onClick={() => signOut()} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-600 transition-colors font-bold text-xs uppercase tracking-widest"><LogOut className="w-4 h-4 me-3" /> Sign Out</button></div>
       </aside>
+      
       <main className="flex-1 overflow-hidden relative">
         {currentView === ViewState.DASHBOARD && <div className="h-full overflow-y-auto p-8"><DashboardStats jobs={jobs} userProfile={userProfile!} /></div>}
-        {currentView === ViewState.SELECTED_JOBS && <div className="h-full overflow-y-auto p-8">{jobs.filter(j => j.status === JobStatus.DETECTED).map(j => <JobCard key={j.id} job={j} onClick={(job) => setSelectedJobId(job.id)} isSelected={selectedJobId === j.id} isChecked={false} onToggleCheck={() => {}} onAutoApply={() => {}} />)}</div>}
+        
+        {currentView === ViewState.SELECTED_JOBS && (
+          <div className="h-full overflow-y-auto p-8">
+            <div className="flex justify-between items-center mb-8">
+               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Opportunities</h2>
+               <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all"
+               >
+                 <Plus className="w-4 h-4" /> Add Manual Lead
+               </button>
+            </div>
+            {jobs.filter(j => j.status === JobStatus.DETECTED).length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
+                <SearchIcon className="w-10 h-10 mb-4 opacity-20" />
+                <p className="font-bold text-xs uppercase tracking-widest">No jobs scanned yet. Run the Inbox Scanner.</p>
+              </div>
+            ) : (
+              jobs.filter(j => j.status === JobStatus.DETECTED).map(j => (
+                <JobCard 
+                  key={j.id} 
+                  job={j} 
+                  onClick={(job) => setSelectedJobId(job.id)} 
+                  isSelected={selectedJobId === j.id} 
+                  isChecked={false} 
+                  onToggleCheck={() => {}} 
+                  onAutoApply={() => {}} 
+                />
+              ))
+            )}
+          </div>
+        )}
+
         {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={async (id, s) => {
             const job = jobs.find(j => j.id === id);
             if (job) handleUpdateJob({...job, status: s});
@@ -180,6 +218,7 @@ export const App: React.FC = () => {
             const token = await getToken();
             if (token) await deleteJobFromDb(id, token);
         }} onSelect={(j) => setSelectedJobId(j.id)} />}
+        
         {currentView === ViewState.SETTINGS && (
           <div className="h-full p-8 overflow-y-auto">
             <Settings 
@@ -194,16 +233,49 @@ export const App: React.FC = () => {
             />
           </div>
         )}
+        
         {currentView === ViewState.DEBUG && <DebugView />}
-        {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={async (newJobs) => {
-            setJobs(prev => [...newJobs, ...prev]);
-            const token = await getToken();
-            if (token) for (const j of newJobs) await saveJobToDb(j, token);
-        }} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
+        
+        {currentView === ViewState.EMAILS && (
+          <div className="h-full p-6">
+            <InboxScanner 
+              onImport={async (newJobs) => {
+                  setJobs(prev => [...newJobs, ...prev]);
+                  const token = await getToken();
+                  if (token) for (const j of newJobs) await saveJobToDb(j, token);
+              }} 
+              sessionAccount={sessionAccount} 
+              onConnectSession={setSessionAccount} 
+              onDisconnectSession={() => setSessionAccount(null)} 
+              showNotification={showNotification} 
+              userPreferences={userProfile?.preferences} 
+            />
+          </div>
+        )}
+        
         {selectedJobId && currentSelectedJob && (
             <div className="absolute inset-0 z-50 bg-slate-50 overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
-                <div className="p-4 bg-white border-b border-slate-200 flex items-center gap-4"><button onClick={() => setSelectedJobId(null)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button> <span className="text-sm font-bold text-slate-400">/ {currentSelectedJob.company}</span></div>
-                <div className="flex-1 overflow-hidden"><JobDetail job={currentSelectedJob} userProfile={userProfile!} onUpdateStatus={() => {}} onUpdateJob={handleUpdateJob} onClose={() => setSelectedJobId(null)} showNotification={showNotification} /></div>
+                <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setSelectedJobId(null)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button> 
+                        <span className="text-sm font-bold text-slate-400">/ {currentSelectedJob.company}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                         <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${currentSelectedJob.status === JobStatus.DETECTED ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                             {currentSelectedJob.status}
+                         </span>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <JobDetail 
+                        job={currentSelectedJob} 
+                        userProfile={userProfile!} 
+                        onUpdateStatus={() => {}} 
+                        onUpdateJob={handleUpdateJob} 
+                        onClose={() => setSelectedJobId(null)} 
+                        showNotification={showNotification} 
+                    />
+                </div>
             </div>
         )}
       </main>
