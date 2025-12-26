@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -7,7 +6,6 @@ import { JobCard } from './JobCard';
 import { InboxScanner } from './InboxScanner';
 import { Settings } from './Settings';
 import { Auth } from './Auth';
-import { Onboarding } from './Onboarding';
 import { ApplicationTracker } from './ApplicationTracker';
 import { DebugView } from './DebugView';
 import { AddJobModal } from './AddJobModal';
@@ -31,7 +29,8 @@ import {
   LogOut,
   X,
   Terminal,
-  Plus
+  Plus,
+  AlertCircle
 } from 'lucide-react';
 import { JobDetail } from './JobDetail';
 
@@ -64,12 +63,28 @@ export const App: React.FC = () => {
               return; 
           }
 
-          const profile = await getUserProfile(token);
+          let profile = await getUserProfile(token);
           
+          // Auto-initialize profile if missing, instead of forcing onboarding view
           if (!profile && user) {
-              setCurrentView(ViewState.ONBOARDING);
-          } else if (profile && !profile.onboardedAt) {
-              setCurrentView(ViewState.ONBOARDING);
+              profile = {
+                  id: user.id,
+                  fullName: user.fullName || '',
+                  email: user.primaryEmailAddress?.emailAddress || '',
+                  phone: '',
+                  resumeContent: '',
+                  onboardedAt: new Date().toISOString(),
+                  preferences: {
+                      targetRoles: [],
+                      targetLocations: [],
+                      minSalary: '',
+                      remoteOnly: false,
+                      language: 'en'
+                  },
+                  connectedAccounts: [],
+                  plan: 'pro'
+              };
+              await saveUserProfile(profile, token);
           }
           
           setUserProfile(profile);
@@ -113,17 +128,11 @@ export const App: React.FC = () => {
     showNotification("Job lead added successfully!", "success");
   };
 
-  const handleOnboardingComplete = (profile: UserProfile) => {
-    setUserProfile(profile);
-    setCurrentView(ViewState.DASHBOARD);
-    showNotification("Onboarding complete!", "success");
-  };
-
   if (!isLoaded) {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2"/>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Authenticating...</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Flow...</p>
         </div>
     );
   }
@@ -141,11 +150,8 @@ export const App: React.FC = () => {
     );
   }
 
-  if (currentView === ViewState.ONBOARDING || !userProfile?.onboardedAt) {
-    return <Onboarding onComplete={handleOnboardingComplete} onDirHandleChange={() => {}} dirHandle={null} showNotification={showNotification} />;
-  }
-
   const currentSelectedJob = jobs.find(j => j.id === selectedJobId);
+  const isResumeMissing = !userProfile?.resumeContent || userProfile.resumeContent.length < 50;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -174,23 +180,46 @@ export const App: React.FC = () => {
       </aside>
       
       <main className="flex-1 overflow-hidden relative">
-        {currentView === ViewState.DASHBOARD && <div className="h-full overflow-y-auto p-8"><DashboardStats jobs={jobs} userProfile={userProfile!} /></div>}
+        {currentView === ViewState.DASHBOARD && (
+          <div className="h-full overflow-y-auto p-8">
+            {isResumeMissing && (
+              <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-[2rem] flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Resume Not Configured</h3>
+                    <p className="text-xs text-amber-700 mt-0.5">Please upload your master resume in Settings to enable AI document generation.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setCurrentView(ViewState.SETTINGS)}
+                  className="px-6 py-3 bg-white border border-amber-200 text-amber-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-100 transition-all shadow-sm"
+                >
+                  Configure Now
+                </button>
+              </div>
+            )}
+            <DashboardStats jobs={jobs} userProfile={userProfile!} />
+          </div>
+        )}
         
         {currentView === ViewState.SELECTED_JOBS && (
           <div className="h-full overflow-y-auto p-8">
             <div className="flex justify-between items-center mb-8">
-               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Lead Discovery</h2>
+               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Leads</h2>
                <button 
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all"
                >
-                 <Plus className="w-4 h-4" /> Add Job Manually
+                 <Plus className="w-4 h-4" /> Add Manual Lead
                </button>
             </div>
             {jobs.filter(j => j.status === JobStatus.DETECTED).length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
                 <SearchIcon className="w-10 h-10 mb-4 opacity-20" />
-                <p className="font-bold text-xs uppercase tracking-widest text-center">No leads found in inbox.<br/>Use the Inbox Scanner or add manually.</p>
+                <p className="font-bold text-xs uppercase tracking-widest text-center">No jobs found in scanner.<br/>Run the Inbox Scanner or add manually.</p>
               </div>
             ) : (
               jobs.filter(j => j.status === JobStatus.DETECTED).map(j => (
