@@ -1,3 +1,4 @@
+
 /**
  * Local AI Service
  * Provides robust fallback generation for Resumes and Cover Letters.
@@ -25,7 +26,9 @@ export const localGenerateCoverLetter = async (
 ): Promise<string> => {
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const keywords = extractKeywords(description);
-    return `${userName}\n${userEmail}\n${today}\n\nHiring Manager\n${company}\n\nRE: Application for ${title}\n\nDear Hiring Manager,\n\nI am writing to express my strong interest in the ${title} position at ${company}. Having reviewed the job description, I am excited about the opportunity to contribute my skills in ${keywords.slice(0, 3).join(', ')} to your team.\n\nSincerely,\n\n${userName}`;
+    const targetName = (company === "Review Required" || !company) ? "Hiring Manager" : company;
+    
+    return `${userName}\n${userEmail}\n${today}\n\n${targetName}\n\nRE: Application for ${title}\n\nDear ${targetName},\n\nI am writing to express my strong interest in the ${title} position at ${targetName}. Having reviewed the job description, I am excited about the opportunity to contribute my skills in ${keywords.slice(0, 3).join(', ')} to your team. My experience aligns closely with your requirements, and I am eager to discuss how my background can benefit your organization.\n\nThank you for your time and consideration.\n\nSincerely,\n\n${userName}`;
 };
 
 export const localCustomizeResume = async (
@@ -36,7 +39,9 @@ export const localCustomizeResume = async (
     email: string
 ): Promise<string> => {
     const keywords = extractKeywords(description);
-    const targetedSummary = `\nCONTACT: ${email}\n\nPROFESSIONAL SUMMARY FOR ${company.toUpperCase()}\n--------------------------------------------------\nDedicated professional targeting the ${title} role. Relevant expertise: ${keywords.join(', ')}.\n`;
+    const targetCompany = (company === "Review Required" || !company) ? "Your Organization" : company;
+    
+    const targetedSummary = `\nCONTACT: ${email}\n\nPROFESSIONAL SUMMARY FOR ${targetCompany.toUpperCase()}\n--------------------------------------------------\nDedicated professional targeting the ${title} role. Relevant expertise: ${keywords.join(', ')}.\n`;
     
     // Simple replacement logic for email in text
     let newResume = originalResume.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, email);

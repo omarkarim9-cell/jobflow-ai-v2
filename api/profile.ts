@@ -1,75 +1,46 @@
+
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import * as ClerkServer from '@clerk/nextjs/server';
 import { neon } from '@neondatabase/serverless';
 
-const sql = neon(process.env.DATABASE_URL!);
-
-// Decode and verify Clerk JWT token manually
-async function verifyClerkToken(authHeader: string | undefined): Promise<string | null> {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
-  
-  const token = authHeader.substring(7);
-  
-  try {
-    // Decode JWT without verification (for development)
-    // In production, you should verify the signature
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      console.error('[API/PROFILE] Invalid JWT format');
-      return null;
-    }
-    
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    
-    // Extract user ID from Clerk JWT payload
-    const userId = payload.sub || payload.user_id || payload.userId;
-    
-    if (!userId) {
-      console.error('[API/PROFILE] No userId in JWT payload:', payload);
-      return null;
-    }
-    
-    console.log('[API/PROFILE] Extracted userId:', userId);
-    return userId;
-  } catch (error: any) {
-    console.error('[API/PROFILE] Token decode error:', error.message);
-    return null;
-  }
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS for Vite dev server
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
   try {
-    const userId = await verifyClerkToken(req.headers.authorization as string);
-    
-    if (!userId) {
-      console.error('[API/PROFILE] Authentication failed');
-      return res.status(401).json({ error: 'Unauthorized: Invalid or missing token' });
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      return res.status(500).json({ error: 'DATABASE_URL is missing.' });
     }
 
-    console.log('[API/PROFILE] Request from user:', userId, 'Method:', req.method);
+    let userId: string | null = null;
+    
+    // Attempt 1: Check manual header first (reliable for Lab/Tester)
+    userId = req.headers['x-clerk-user-id'] as string || null;
+
+    // Attempt 2: Clerk SDK (standard app flow)
+    if (!userId) {
+      try {
+        const Clerk = (ClerkServer as any).default || ClerkServer;
+        // Check if we are in a Vercel Node context where getAuth might need the request
+        const auth = Clerk.getAuth(req);
+        userId = auth?.userId;
+      } catch (authError) {
+        console.warn('[API/PROFILE] Clerk SDK session detection skipped or failed.');
+      }
+    }
+
+    if (!userId) {
+      return res.status(401).json({ 
+        error: 'Unauthorized', 
+        details: 'No User ID found in session or x-clerk-user-id header.' 
+      });
+    }
+
+    const sql = neon(dbUrl);
 
     if (req.method === 'GET') {
       const result = await sql`SELECT * FROM profiles WHERE id = ${userId}`;
+      if (result.length === 0) return res.status(404).json({ error: 'Profile not found.' });
       
-      if (result.length === 0) {
-        console.log('[API/PROFILE] Profile not found for:', userId);
-        return res.status(404).json({ error: 'Profile not found' });
-      }
-
       const p = result[0];
-      console.log('[API/PROFILE] Profile fetched successfully');
-      
       return res.status(200).json({
         id: p.id,
         fullName: p.full_name,
@@ -86,11 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST') {
       const body = req.body;
-      if (!body) {
-        return res.status(400).json({ error: 'Empty request body' });
-      }
-
-      console.log('[API/PROFILE] Saving profile for:', userId);
+      if (!body) return res.status(400).json({ error: 'Empty request body.' });
 
       const prefs = typeof body.preferences === 'string' ? body.preferences : JSON.stringify(body.preferences || {});
       const accounts = typeof body.connectedAccounts === 'string' ? body.connectedAccounts : JSON.stringify(body.connectedAccounts || []);
@@ -121,27 +88,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updated_at = NOW()
         RETURNING *
       `;
-      
-      const saved = result[0];
-      console.log('[API/PROFILE] Profile saved successfully');
-      
-      return res.status(200).json({
-        id: saved.id,
-        fullName: saved.full_name,
-        email: saved.email,
-        phone: saved.phone || '',
-        resumeContent: saved.resume_content,
-        resumeFileName: saved.resume_file_name || '',
-        preferences: typeof saved.preferences === 'string' ? JSON.parse(saved.preferences) : saved.preferences,
-        connectedAccounts: saved.connected_accounts || [],
-        plan: saved.plan || 'free',
-        onboardedAt: saved.updated_at
-      });
+      return res.status(200).json(result[0]);
     }
 
     return res.status(405).json({ error: 'Method Not Allowed' });
   } catch (error: any) {
-    console.error('[API/PROFILE] Error:', error.message, error.stack);
-    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    console.error('[API/PROFILE] Fatal Crash:', error.message);
+    return res.status(500).json({ error: 'API Execution Error', details: error.message });
   }
 }

@@ -12,6 +12,7 @@ import { Support } from './Support';
 import { Auth } from './Auth';
 import { Onboarding } from './Onboarding';
 import { ApplicationTracker } from './ApplicationTracker';
+import { DebugView } from './DebugView';
 import { NotificationToast, NotificationType } from './NotificationToast';
 import { LanguageCode } from '../services/localization';
 import { 
@@ -31,7 +32,7 @@ import {
   List,
   LogOut,
   X,
-  ChevronRight
+  Terminal
 } from 'lucide-react';
 import { JobDetail } from './JobDetail';
 
@@ -63,7 +64,8 @@ export const App: React.FC = () => {
               return; 
           }
 
-          const profile = await getUserProfile(token).catch(() => null);
+          // Fetch profile with fallback built into service
+          const profile = await getUserProfile(token);
           
           if (!profile && user) {
               setCurrentView(ViewState.ONBOARDING);
@@ -72,10 +74,13 @@ export const App: React.FC = () => {
           }
           
           setUserProfile(profile);
-          const dbJobs = await fetchJobsFromDb(token).catch(() => []);
+
+          // Fetch jobs with fallback built into service
+          const dbJobs = await fetchJobsFromDb(token);
           setJobs(dbJobs);
       } catch (e) {
-          showNotification("Cloud sync interrupted.", "error");
+          console.error("Sync Error:", e);
+          showNotification("Using local offline data.", "success");
       } finally {
           setLoading(false);
       }
@@ -89,7 +94,7 @@ export const App: React.FC = () => {
             setLoading(false);
         }
     }
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, syncData]);
 
   const handleUpdateProfile = async (updated: UserProfile) => {
     setUserProfile(updated);
@@ -109,27 +114,37 @@ export const App: React.FC = () => {
     showNotification("Onboarding complete!", "success");
   };
 
-  // 1. Loading State (Wait for Clerk to initialize)
-  if (!isLoaded || (isSignedIn && loading)) {
+  // 1. Clerk Identity Check
+  if (!isLoaded) {
     return (
         <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-            <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-4"/>
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Synchronizing Session...</p>
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2"/>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Identity...</p>
         </div>
     );
   }
 
-  // 2. Auth Gate (If not signed in, show Auth component)
+  // 2. Auth Gate
   if (!isSignedIn) {
     return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
   }
 
-  // 3. Onboarding Gate (If signed in but no profile, show Onboarding)
-  if (currentView === ViewState.ONBOARDING) {
+  // 3. Data Loading Gate
+  if (loading && !userProfile) {
+    return (
+        <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+            <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-4"/>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Syncing Workspace...</p>
+        </div>
+    );
+  }
+
+  // 4. Onboarding Gate
+  if (currentView === ViewState.ONBOARDING || !userProfile?.onboardedAt) {
     return <Onboarding onComplete={handleOnboardingComplete} onDirHandleChange={() => {}} dirHandle={null} showNotification={showNotification} />;
   }
 
-  // 4. Main App (Dashboard, Tracker, etc.)
+  // 5. Main App
   const currentSelectedJob = jobs.find(j => j.id === selectedJobId);
 
   return (
@@ -150,6 +165,7 @@ export const App: React.FC = () => {
           <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><Mail className="w-5 h-5 me-3" /> Inbox Scanner</button>
           <div className="my-2 border-t border-slate-100" />
           <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><SettingsIcon className="w-5 h-5 me-3" /> Settings</button>
+          <button onClick={() => setCurrentView(ViewState.DEBUG)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.DEBUG ? 'bg-slate-900 text-white font-bold shadow-sm' : 'text-slate-400 hover:bg-slate-50'}`}><Terminal className="w-5 h-5 me-3" /> Debug Console</button>
         </div>
         <div className="p-4 border-t border-slate-200 mt-auto"><button onClick={() => signOut()} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-600 transition-colors font-bold text-xs uppercase tracking-widest"><LogOut className="w-4 h-4 me-3" /> Sign Out</button></div>
       </aside>
@@ -164,7 +180,21 @@ export const App: React.FC = () => {
             const token = await getToken();
             if (token) await deleteJobFromDb(id, token);
         }} onSelect={(j) => setSelectedJobId(j.id)} />}
-        {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={null} onDirHandleChange={() => {}} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
+        {currentView === ViewState.SETTINGS && (
+          <div className="h-full p-8 overflow-y-auto">
+            <Settings 
+              key={userProfile?.id || 'settings'} 
+              userProfile={userProfile!} 
+              onUpdate={handleUpdateProfile} 
+              dirHandle={null} 
+              onDirHandleChange={() => {}} 
+              jobs={jobs} 
+              showNotification={showNotification} 
+              onReset={() => signOut()} 
+            />
+          </div>
+        )}
+        {currentView === ViewState.DEBUG && <DebugView />}
         {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={async (newJobs) => {
             setJobs(prev => [...newJobs, ...prev]);
             const token = await getToken();

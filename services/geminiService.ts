@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job, JobStatus } from "../types";
 
@@ -6,11 +7,24 @@ import { Job, JobStatus } from "../types";
  */
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const targetCompany = (company === "Review Required" || !company) ? "the Hiring Manager" : company;
+    
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Write a high-impact cover letter for ${title} at ${company}. Name: ${name}, Email: ${email}, Resume: ${resume}`,
+        contents: `Write a high-impact cover letter for the ${title} position at ${targetCompany}.
+        
+        Details:
+        - Candidate Name: ${name}
+        - Email: ${email}
+        - Original Resume: ${resume}
+        - Job Description: ${description}
+        
+        Instructions:
+        - Ensure the tone is professional yet enthusiastic.
+        - Address the letter specifically to ${targetCompany}.
+        - Highlight skills from the resume that match the job description.`,
         config: {
-            systemInstruction: "You are an expert career coach writing professional cover letters."
+            systemInstruction: "You are an expert career coach writing professional, high-conversion cover letters."
         }
     });
     return response.text || "";
@@ -23,9 +37,12 @@ export const customizeResume = async (title: string, company: string, descriptio
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Tailor this resume for ${title} at ${company}. Email: ${email}. Resume: ${resume}`,
+        contents: `Tailor this resume for a ${title} role at ${company}. 
+        Email: ${email}. 
+        Original Resume: ${resume}
+        Job Description: ${description}`,
         config: {
-            systemInstruction: "You are a professional resume writer specializing in ATS optimization."
+            systemInstruction: "You are a professional resume writer specializing in ATS optimization. Rewrite bullet points to emphasize relevant experience for the specific role."
         }
     });
     return response.text || "";
@@ -33,25 +50,53 @@ export const customizeResume = async (title: string, company: string, descriptio
 
 /**
  * Extracts job details from a URL using Google Search grounding.
+ * Upgraded to Gemini 3 Pro for superior reasoning over search snippets.
  */
 export const extractJobFromUrl = async (url: string): Promise<{data: any, sources: any[]}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Extract full job details from this URL: ${url}. Return as JSON with keys: title, company, location, salaryRange, description, requirements.`,
-        config: { tools: [{ googleSearch: {} }] }
+        model: 'gemini-3-pro-preview',
+        contents: `Analyze the job posting at this URL: ${url}. 
+        
+        TASK:
+        Extract the following details as a clean JSON object. 
+        CRITICAL: If you cannot find the company name directly on the page, use Google Search to identify the company hosting this job link. NEVER return "Review Required" if search can find it.
+
+        Fields:
+        - title (The official job title)
+        - company (The specific hiring company name)
+        - location (City, State or Remote)
+        - salaryRange (The salary if mentioned)
+        - description (A summary of the role)
+        - requirements (A comma-separated string of key skills)
+
+        Return ONLY the JSON object.`,
+        config: { 
+            tools: [{ googleSearch: {} }] 
+        }
     });
     
     const text = response.text || "";
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
     try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        
+        if (!parsed) {
+             return {
+                data: { title: 'Extracted Role', company: 'Check Site', description: text },
+                sources
+            };
+        }
+
         return {
-            data: jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Extracted Role', company: 'Check Site', description: text },
+            data: parsed,
             sources
         };
     } catch (e) {
+        console.error("Gemini extraction parsing failed", e);
         return {
             data: { title: 'Extracted Role', company: 'Check Site', description: text },
             sources
@@ -97,7 +142,6 @@ export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Jo
 
 /**
  * Searches for nearby jobs using Google Maps grounding.
- * Available only in Gemini 2.5 series models.
  */
 export const searchNearbyJobs = async (lat: number, lng: number, role: string): Promise<Job[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -144,4 +188,3 @@ export const searchNearbyJobs = async (lat: number, lng: number, role: string): 
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
     return url;
 };
-

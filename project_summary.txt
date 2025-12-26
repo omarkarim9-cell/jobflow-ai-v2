@@ -1,0 +1,69 @@
+
+JobFlow AI - Project Summary & Feature Recap
+Date: November 20, 2025
+Status: Beta (Feature Complete)
+
+================================================================================
+CURRENT FEATURES (WHAT THE APP DOES NOW)
+================================================================================
+
+1. USER ONBOARDING
+   - Profile Creation: Sets up name, email, and phone.
+   - Job Preferences: Defines Target Roles (e.g., "React Developer") and Locations.
+   - Master Resume: Uploads a text resume or links to a local file to be used for AI customization.
+   - Session Lock: Locks the email to the browser to simulate a secure single-user login.
+
+2. FILE SYSTEM BRIDGE (VIRTUAL WORKSPACE)
+   - Problem Solved: Browsers cannot normally access your C: drive for security.
+   - Solution: A "Virtual Workspace" that mimics a real folder.
+   - Function: You connect to a path name (e.g., "C:\JobFlow"), and the app auto-creates "jobs.txt" and "resume.txt" inside the browser's memory.
+   - Persistence: Remembers your folder connection even after you refresh the page.
+
+3. GMAIL CONNECTION
+   - Manual Token Wizard: A step-by-step visual guide to getting a secure Access Token from Google.
+   - Direct API Fetch: Connects directly to Gmail to fetch the last 50 emails.
+   - Privacy: Filters emails server-side to only look for subjects containing "Job", "Hiring", "Vacancy", etc.
+
+4. INBOX SCANNER (THE MAIN ENGINE)
+   - One-Click Automation: Fetches emails, analyzes content, and filters results automatically when you open the tab.
+   - Accurate Extraction: Uses a strict code-based logic (ported from Python) to count links accurately (finding 19+ jobs per email).
+   - Tracking Link Fixer: Repairs broken links (like Indeed's "jk=" links) that usually break in email readers.
+   - Strict Filtering: 
+     * Only extracts IT/Engineering roles by default.
+     * If you set preferences, it HIDES any job that doesn't match your Target Role.
+   - Consolidated List: Combines results from 50+ emails into one clean list, removing duplicates.
+
+5. JOB DASHBOARD (SELECTED JOBS)
+   - Management: View imported jobs with details (Company, Location, Salary).
+   - Filtering: Toggle "Match My Preferences" to see only relevant jobs.
+   - Search: Real-time text search for titles or companies.
+   - Status Tracking: Move jobs between statuses (Detected -> Auto-Applied -> Interview).
+
+6. AI DOCUMENT GENERATION
+   - Resume Tailoring: Rewrites your Master Resume specifically for a chosen job description.
+   - Cover Letter Writer: Generates a unique cover letter for the specific company.
+   - Save to Disk: Saves the generated resume to your Virtual Workspace as a text file.
+
+7. AUTO-APPLY SIMULATION
+   - Visual Progress: A simulation bar that shows the steps a bot would take (Navigating -> Filling Form -> Uploading Resume).
+   - Logic: It simulates selecting the *AI-Tailored* resume instead of the generic one.
+
+================================================================================
+SUGGESTED ENHANCEMENTS (ROADMAP)
+================================================================================
+
+1. EXPORT CAPABILITIES
+   - Add a "Download CSV" button to the Selected Jobs view so you can track applications in Excel.
+
+2. REAL AUTOMATION
+   - Currently, the "Auto-Apply" is a simulation. 
+   - Next Step: Generate a JSON instruction file that a real Python script (running on your PC) can read to actually drive the browser.
+
+3. DATE FILTERS
+   - Add a dropdown to the Inbox Scanner to filter emails by date (e.g., "Last 24 Hours", "Last Week").
+
+4. BACKEND DATABASE
+   - Replace the browser storage (Local Storage) with a real database (Supabase or Firebase) so you can access your data from multiple devices.
+
+5. ADVANCED ANALYTICS
+   - Add charts showing "Most Frequent Companies" or "Salary Ranges" found in your inbox.

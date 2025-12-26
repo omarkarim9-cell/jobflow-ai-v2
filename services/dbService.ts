@@ -1,22 +1,15 @@
-
 import { Job, UserProfile, UserPreferences } from '../types';
 
 /**
  * Service to interact with Neon PostgreSQL via Vercel Serverless Functions.
- * Includes localStorage fallback for robust local development and offline resilience.
  */
 
 const API_BASE = '/api';
-
 const LOCAL_PROFILE_KEY = 'jobflow_profile_cache';
 const LOCAL_JOBS_KEY = 'jobflow_jobs_cache';
 
-/**
- * Normalizes user preferences to ensure consistency across the platform.
- */
 const normalizePreferences = (prefs: any): UserPreferences => {
     if (!prefs) return { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
-    
     return {
         targetRoles: Array.isArray(prefs.targetRoles) ? prefs.targetRoles : [],
         targetLocations: Array.isArray(prefs.targetLocations) ? prefs.targetLocations : [],
@@ -27,9 +20,6 @@ const normalizePreferences = (prefs: any): UserPreferences => {
     };
 };
 
-/**
- * Normalizes user profile data from database response to frontend interface.
- */
 const normalizeProfile = (data: any): UserProfile | null => {
     if (!data) return null;
     return {
@@ -48,20 +38,7 @@ const normalizeProfile = (data: any): UserProfile | null => {
 };
 
 export const saveUserProfile = async (profile: UserProfile, clerkToken: string) => {
-    // Immediate Local Save (Fallback)
     localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
-
-    const payload = {
-        fullName: profile.fullName,
-        email: profile.email,
-        phone: profile.phone,
-        resumeContent: profile.resumeContent,
-        resumeFileName: profile.resumeFileName,
-        preferences: profile.preferences,
-        connectedAccounts: profile.connectedAccounts,
-        plan: profile.plan || 'free'
-    };
-
     try {
         const response = await fetch(`${API_BASE}/profile`, {
             method: 'POST',
@@ -69,17 +46,21 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${clerkToken}`
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(profile)
         });
         
-        if (!response.ok) throw new Error('Cloud sync failed');
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error('[dbService] Profile save failed:', errData);
+            throw new Error(errData.message || 'Cloud sync failed');
+        }
         
         const data = await response.json();
         const normalized = normalizeProfile(data);
         if (normalized) localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(normalized));
         return normalized || profile;
     } catch (err) {
-        console.warn("[JobFlow DB Sync] Cloud Save failed, using local only.");
+        console.warn("[dbService] Cloud Save failed:", err);
         return profile;
     }
 };
@@ -87,22 +68,20 @@ export const saveUserProfile = async (profile: UserProfile, clerkToken: string) 
 export const getUserProfile = async (clerkToken: string): Promise<UserProfile | null> => {
     try {
         const response = await fetch(`${API_BASE}/profile`, {
-            headers: {
-                'Authorization': `Bearer ${clerkToken}`
-            }
+            headers: { 'Authorization': `Bearer ${clerkToken}` }
         });
         if (response.ok) {
             const data = await response.json();
             const profile = normalizeProfile(data);
-            if (profile) {
-                localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
-                return profile;
-            }
+            if (profile) localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
+            return profile;
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            console.error('[dbService] Fetch profile failed:', response.status, errData);
         }
     } catch (e) {
-        console.warn("[JobFlow DB] Get profile cloud failed, checking local.");
+        console.warn("[dbService] Fetch profile network error:", e);
     }
-
     const cached = localStorage.getItem(LOCAL_PROFILE_KEY);
     return cached ? JSON.parse(cached) : null;
 };
@@ -110,26 +89,25 @@ export const getUserProfile = async (clerkToken: string): Promise<UserProfile | 
 export const fetchJobsFromDb = async (clerkToken: string): Promise<Job[]> => {
     try {
         const response = await fetch(`${API_BASE}/jobs`, {
-            headers: {
-                'Authorization': `Bearer ${clerkToken}`
-            }
+            headers: { 'Authorization': `Bearer ${clerkToken}` }
         });
         if (response.ok) {
             const data = await response.json();
             const jobs = data.jobs || [];
             localStorage.setItem(LOCAL_JOBS_KEY, JSON.stringify(jobs));
             return jobs;
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            console.error('[dbService] Fetch jobs failed:', response.status, errData);
         }
     } catch (e) {
-        console.warn("[JobFlow DB] Fetch jobs cloud failed, checking local.");
+        console.warn("[dbService] Fetch jobs network error:", e);
     }
-
     const cached = localStorage.getItem(LOCAL_JOBS_KEY);
     return cached ? JSON.parse(cached) : [];
 };
 
 export const saveJobToDb = async (job: Job, clerkToken: string) => {
-    // Local persistence
     const cached = localStorage.getItem(LOCAL_JOBS_KEY);
     const jobs: Job[] = cached ? JSON.parse(cached) : [];
     const index = jobs.findIndex(j => j.id === job.id);
@@ -145,32 +123,28 @@ export const saveJobToDb = async (job: Job, clerkToken: string) => {
             },
             body: JSON.stringify(job)
         });
-        return response.ok;
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error('[dbService] Job save failed:', errData);
+        }
     } catch (e) {
-        console.warn("[JobFlow DB] Save job to cloud failed.");
-        return false;
+        console.warn("[dbService] Job save network error:", e);
     }
 };
 
 export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
-    // Local persistence
     const cached = localStorage.getItem(LOCAL_JOBS_KEY);
     if (cached) {
         const jobs: Job[] = JSON.parse(cached);
         localStorage.setItem(LOCAL_JOBS_KEY, JSON.stringify(jobs.filter(j => j.id !== jobId)));
     }
-
     try {
-        const response = await fetch(`${API_BASE}/jobs?id=${jobId}`, {
+        await fetch(`${API_BASE}/jobs?id=${jobId}`, {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${clerkToken}`
-            }
+            headers: { 'Authorization': `Bearer ${clerkToken}` }
         });
-        return response.ok;
     } catch (e) {
-        console.warn("[JobFlow DB] Delete job from cloud failed.");
-        return false;
+        console.warn("[dbService] Job delete network error:", e);
     }
 };
 
