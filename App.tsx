@@ -38,7 +38,6 @@ import {
   AlertCircle,
   ArrowRight,
   Trash2,
-  Wand2,
   X,
   Sparkles,
   ChevronRight
@@ -84,7 +83,6 @@ export const App: React.FC = () => {
                   id: user.id,
                   fullName: user.fullName || 'User',
                   email: user.primaryEmailAddress?.emailAddress || '',
-                  password: '',
                   phone: '',
                   resumeContent: '',
                   connectedAccounts: [],
@@ -93,7 +91,6 @@ export const App: React.FC = () => {
                   onboardedAt: new Date().toISOString()
               };
           } else if (profile && user) {
-              // Ensure email is always the latest from Clerk
               profile.email = user.primaryEmailAddress?.emailAddress || profile.email;
           }
           
@@ -139,7 +136,7 @@ export const App: React.FC = () => {
     } catch (error: any) {
         console.error("Sync Failure:", error);
         showNotification(error.message || "Cloud sync unavailable.", "error");
-        throw error; // Re-throw so Settings.tsx knows it failed
+        throw error;
     }
   };
   
@@ -350,36 +347,35 @@ export const App: React.FC = () => {
         </div>
       </aside>
       <main className="flex-1 overflow-hidden relative">
-       {currentView === ViewState.DASHBOARD && (
-  <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-    {isProfileEmpty && (
-      <div className="mb-8 p-4 bg-indigo-600 rounded-2xl flex items-center justify-between shadow-xl shadow-indigo-100 text-white">
-        <div className="flex items-center gap-4">
-          <div className="p-2 bg-white/20 rounded-xl">
-            <AlertCircle className="w-6 h-6 text-white" />
+        {currentView === ViewState.DASHBOARD && (
+          <div className="h-full overflow-y-auto p-8 animate-in fade-in">
+            {isProfileEmpty && (
+              <div className="mb-8 p-4 bg-indigo-600 rounded-2xl flex items-center justify-between shadow-xl shadow-indigo-100 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <AlertCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold">Complete your profile</h4>
+                    <p className="text-xs text-indigo-100">Upload your resume to enable AI tailored assets.</p>
+                  </div>
+                </div>
+                <button onClick={() => setCurrentView(ViewState.SETTINGS)} className="bg-white text-indigo-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-colors flex items-center gap-2">Setup Profile <ArrowRight className="w-4 h-4" /></button>
+              </div>
+            )}
+            <DashboardStats jobs={jobs} userProfile={userProfile!} />
+            
+            <div className="mt-8">
+              <button
+                onClick={() => setIsAddJobModalOpen(true)}
+                className="w-full p-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group"
+              >
+                <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                <span className="text-lg font-black uppercase tracking-widest">Add Job from URL</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <h4 className="font-bold">Complete your profile</h4>
-            <p className="text-xs text-indigo-100">Upload your resume to enable AI tailored assets.</p>
-          </div>
-        </div>
-        <button onClick={() => setCurrentView(ViewState.SETTINGS)} className="bg-white text-indigo-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-colors flex items-center gap-2">Setup Profile <ArrowRight className="w-4 h-4" /></button>
-      </div>
-    )}
-    <DashboardStats jobs={jobs} userProfile={userProfile!} />
-    
-    {/* Add Job Button - Dashboard */}
-    <div className="mt-8">
-      <button
-        onClick={() => setIsAddJobModalOpen(true)}
-        className="w-full p-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group"
-      >
-        <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-        <span className="text-lg font-black uppercase tracking-widest">Add Job from URL</span>
-      </button>
-    </div>
-  </div>
-)}
+        )}
         {currentView === ViewState.SELECTED_JOBS && (
             <div className="h-full overflow-y-auto p-8 animate-in fade-in pb-32">
                 <div className="mb-8 flex items-center justify-between">
@@ -387,7 +383,16 @@ export const App: React.FC = () => {
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Jobs</h1>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Found from your inbox</p>
                     </div>
-                    {detectedJobsCount > 0 && <button onClick={handleClearScannedJobs} className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black uppercase transition-all"><Trash2 className="w-4 h-4" /> Clear Scanned</button>}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsAddJobModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            Add from URL
+                        </button>
+                        {detectedJobsCount > 0 && <button onClick={handleClearScannedJobs} className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black uppercase transition-all"><Trash2 className="w-4 h-4" /> Clear Scanned</button>}
+                    </div>
                 </div>
                 {jobs.filter(j => j.status === JobStatus.DETECTED).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -410,24 +415,24 @@ export const App: React.FC = () => {
                 )}
             </div>
         )}
-      {currentView === ViewState.TRACKER && (
-  <div className="h-full overflow-y-auto p-8 animate-in fade-in">
-    <div className="mb-6 flex items-center justify-between">
-      <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Applications</h1>
-        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Track your job applications</p>
-      </div>
-      <button
-        onClick={() => setIsAddJobModalOpen(true)}
-        className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-      >
-        <Sparkles className="w-4 h-4" />
-        Add Job from URL
-      </button>
-    </div>
-    <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); }} />
-  </div>
-)}
+        {currentView === ViewState.TRACKER && (
+          <div className="h-full overflow-y-auto p-8 animate-in fade-in">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Applications</h1>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Track your job applications</p>
+              </div>
+              <button
+                onClick={() => setIsAddJobModalOpen(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+              >
+                <Sparkles className="w-4 h-4" />
+                Add Job from URL
+              </button>
+            </div>
+            <ApplicationTracker jobs={jobs} onUpdateStatus={handleJobUpdate} onDelete={handleDeleteJob} onSelect={(j) => { setSelectedJobId(j.id); }} />
+          </div>
+        )}
         {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto animate-in fade-in"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={dirHandle} onDirHandleChange={setDirHandle} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} /></div>}
         {currentView === ViewState.EMAILS && <div className="h-full p-6 animate-in fade-in"><InboxScanner onImport={handleAddJobs} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
         {currentView === ViewState.SUBSCRIPTION && <Subscription userProfile={userProfile!} onUpdateProfile={handleUpdateProfile} showNotification={showNotification} />}
