@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
@@ -7,24 +8,22 @@ import './index.css';
 
 /**
  * Enhanced Environment Variable Detection
- * Prioritizes NEXT_PUBLIC prefix as per user requirement
+ * Prioritizes common prefix patterns used in various dev environments.
  */
 const getEnv = (key: string): string => {
-    // Candidates for the Clerk key specifically
+    // @ts-ignore - Vite environment
+    const meta = (import.meta as any).env || {};
+    
     const candidates = [
         `NEXT_PUBLIC_${key}`,
         `VITE_${key}`,
         key
     ];
     
-    // @ts-ignore - Vite environment
-    const meta = (import.meta as any).env || {};
-    
     for (const c of candidates) {
         if (meta[c]) return String(meta[c]);
     }
     
-    // Fallback for non-Vite contexts (process.env injection)
     try {
         const globalEnv = (window as any).process?.env || {};
         for (const c of candidates) {
@@ -38,24 +37,18 @@ const getEnv = (key: string): string => {
 const CLERK_KEY = getEnv('CLERK_PUBLISHABLE_KEY');
 const GEMINI_KEY = getEnv('API_KEY');
 
-// Ensure process.env is configured correctly for SDKs
+// Inject key into process.env if available
 if (typeof window !== 'undefined') {
     (window as any).process = (window as any).process || { env: {} };
-    // Force development mode to match pk_test keys
     (window as any).process.env.NODE_ENV = 'development';
     
-    // Inject the key into multiple expected slots to prevent Clerk internal failures
-    (window as any).process.env.VITE_CLERK_PUBLISHABLE_KEY = CLERK_KEY;
-    (window as any).process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = CLERK_KEY;
-    (window as any).process.env.CLERK_PUBLISHABLE_KEY = CLERK_KEY;
-    
+    if (CLERK_KEY) (window as any).process.env.CLERK_PUBLISHABLE_KEY = CLERK_KEY;
     if (GEMINI_KEY) (window as any).process.env.API_KEY = GEMINI_KEY;
 }
 
 const ConfigurationGuard: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     
-    // Validate if key exists and looks like a Clerk key
     const hasKey = (CLERK_KEY?.startsWith('pk_test_') || CLERK_KEY?.startsWith('pk_live_'));
 
     const handleRefresh = () => {

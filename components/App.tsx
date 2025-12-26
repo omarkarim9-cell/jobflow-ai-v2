@@ -258,25 +258,6 @@ export const App: React.FC = () => {
           </div>
         )}
         
-        {currentView === ViewState.DEBUG && <DebugView />}
-        
-        {currentView === ViewState.EMAILS && (
-          <div className="h-full p-6">
-            <InboxScanner 
-              onImport={async (newJobs) => {
-                  setJobs(prev => [...newJobs, ...prev]);
-                  const token = await getToken();
-                  if (token) for (const j of newJobs) await saveJobToDb(j, token);
-              }} 
-              sessionAccount={sessionAccount} 
-              onConnectSession={setSessionAccount} 
-              onDisconnectSession={() => setSessionAccount(null)} 
-              showNotification={showNotification} 
-              userPreferences={userProfile?.preferences} 
-            />
-          </div>
-        )}
-        
         {selectedJobId && currentSelectedJob && (
             <div className="absolute inset-0 z-50 bg-slate-50 overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
                 <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">

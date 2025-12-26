@@ -8,7 +8,7 @@ import { Job, JobStatus } from "../types";
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Improved placeholder check
+    // Check if we have a valid company name
     const isPlaceholder = !company || 
         company.toLowerCase().includes("review") || 
         company.toLowerCase().includes("unknown") || 
@@ -28,7 +28,6 @@ export const generateCoverLetter = async (title: string, company: string, descri
         STRICT INSTRUCTIONS:
         - NEVER use the phrase "Review Required", "Unknown Company", "Check Site", or "Check Description" in the letter.
         - Address the recipient formally.
-        - Use a professional and enthusiastic tone.
         - Match candidate skills to the requirements in the job description.`,
         config: {
             systemInstruction: "You are an expert career coach writing professional, ATS-optimized cover letters."
@@ -61,8 +60,7 @@ export const customizeResume = async (title: string, company: string, descriptio
 };
 
 /**
- * Extracts job details from a URL using Google Search grounding.
- * Upgraded to Gemini 3 Pro for superior reasoning and search capability.
+ * Extracts job details from a URL using Gemini 3 Pro with Thinking and Google Search.
  */
 export const extractJobFromUrl = async (url: string): Promise<{data: any, sources: any[]}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -73,44 +71,51 @@ export const extractJobFromUrl = async (url: string): Promise<{data: any, source
             contents: `Analyze the job posting at this URL: ${url}. 
             
             TASK:
-            Extract the following details as a clean JSON object. 
-            CRITICAL: Identifying the company name is mandatory. Use Google Search to find which company owns this job posting if the page is unclear or if it's a job board link.
-            DO NOT return "Review Required", "Unknown", or "Check Description". Find the real company name.
+            Extract job details as a clean JSON object.
+            
+            CRITICAL REQUIREMENT: 
+            Identify the actual hiring company name. If it's a generic job board link (like LinkedIn or Indeed), use your search tool to find the original company posting. 
+            DO NOT return "Review Required" or "Unknown". You must find the real company name.
 
-            Fields:
-            - title (The official job title)
-            - company (The hiring company name)
-            - location (City, State or Remote)
-            - description (Full summary of the role)
-            - requirements (Comma-separated key skills)
+            Fields to extract:
+            - title
+            - company (MANDATORY: REAL NAME ONLY)
+            - location
+            - description (Full summary)
+            - requirements (Comma-separated)
 
             Return ONLY the JSON object.`,
             config: { 
-                tools: [{ googleSearch: {} }] 
+                thinkingConfig: { thinkingBudget: 4000 },
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        company: { type: Type.STRING },
+                        location: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        requirements: { type: Type.STRING }
+                    },
+                    required: ["title", "company", "description"]
+                }
             }
         });
         
-        const text = response.text || "";
+        const data = JSON.parse(response.text || "{}");
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        
-        const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-        
-        if (!parsed || !parsed.title) {
-             throw new Error("Invalid extraction data");
+
+        // Final sanity check on company name
+        if (!data.company || data.company.toLowerCase().includes("review") || data.company.toLowerCase().includes("unknown")) {
+            data.company = "Hiring Team";
         }
 
-        // Clean up common AI placeholders if they slip through
-        if (parsed.company && (parsed.company.toLowerCase().includes("review") || parsed.company.toLowerCase().includes("unknown"))) {
-             parsed.company = "Check Page Source";
-        }
-
-        return { data: parsed, sources };
+        return { data, sources };
     } catch (e) {
         console.error("Gemini extraction failed", e);
         return {
-            data: { title: 'New Opportunity', company: 'Identifying...', description: 'Please paste the description if missing.' },
+            data: { title: 'New Role', company: 'Hiring Team', description: 'Manual entry required.' },
             sources: []
         };
     }
@@ -123,7 +128,7 @@ export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Jo
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Extract job postings from this email HTML. Return a JSON array of objects with title, company, location, salaryRange, description, and applicationUrl. HTML: ${html}`,
+        contents: `Extract job postings from this email HTML. Return a JSON array of objects. HTML: ${html}`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -147,13 +152,12 @@ export const extractJobsFromEmailHtml = async (html: string): Promise<Partial<Jo
     try {
         return JSON.parse(response.text || "[]");
     } catch (e) {
-        console.error("Failed to parse JSON from email extraction", e);
         return [];
     }
 };
 
 /**
- * Processes a job URL to ensure it's a direct application link.
+ * URL cleaning helper
  */
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
     try {
@@ -167,13 +171,13 @@ export const getSmartApplicationUrl = (url: string, title: string, company: stri
 };
 
 /**
- * Searches for nearby jobs using Google Maps grounding.
+ * Maps grounding search
  */
 export const searchNearbyJobs = async (lat: number, lng: number, role: string): Promise<Job[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Find 5 active ${role} job openings near these coordinates: latitude ${lat}, longitude ${lng}.`,
+        contents: `Find 5 active ${role} job openings near latitude ${lat}, longitude ${lng}.`,
         config: {
             tools: [{ googleMaps: {} }],
             toolConfig: {
@@ -197,7 +201,7 @@ export const searchNearbyJobs = async (lat: number, lng: number, role: string): 
                 title: role,
                 company: chunk.maps.title || 'Nearby Company',
                 location: 'Local Area',
-                description: `Found via Google Maps grounding for ${role}.`,
+                description: `Found via Google Maps grounding.`,
                 source: 'Imported Link',
                 detectedAt: new Date().toISOString(),
                 status: JobStatus.DETECTED,

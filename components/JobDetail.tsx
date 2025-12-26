@@ -40,27 +40,32 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     }
     
     setIsGenerating(true);
-    notify(`AI is generating tailored documents for ${job.company}...`, 'success');
+    notify(`AI Agent is tailoring your assets for ${job.company}...`, 'success');
     
     try {
-        // Parallel generation for speed
+        // Run parallel generations
         const [finalResume, finalLetter] = await Promise.all([
             customizeResume(job.title, job.company, job.description, userProfile.resumeContent, userProfile.email),
             generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email)
         ]);
         
-        const updatedJob = { 
+        if (!finalResume || !finalLetter) {
+            throw new Error("AI returned empty content");
+        }
+
+        const updatedJob: Job = { 
             ...job, 
-            customizedResume: finalResume || "Failed to generate resume text.", 
-            coverLetter: finalLetter || "Failed to generate cover letter text.", 
-            status: JobStatus.SAVED 
+            customizedResume: finalResume, 
+            coverLetter: finalLetter, 
+            status: job.status === JobStatus.DETECTED ? JobStatus.SAVED : job.status 
         };
         
-        onUpdateJob(updatedJob);
-        notify("Assets generated successfully!", "success");
+        // Push update to parent and database
+        await onUpdateJob(updatedJob);
+        notify("Application assets ready for review!", "success");
     } catch (e) {
-        console.error("Generation error in JobDetail:", e);
-        notify("Generation failed. Please verify your API Key in environment.", "error");
+        console.error("Asset generation failed:", e);
+        notify("Generation failed. Please verify your connection or API key.", "error");
     } finally {
         setIsGenerating(false);
     }
