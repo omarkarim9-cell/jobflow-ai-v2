@@ -2,10 +2,13 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Job, UserProfile, JobStatus } from "../types";
 
+/**
+ * Helper to initialize the Gemini client using the globally available API key.
+ */
 const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Deep Intelligence Scanner: Uses Pro model for high-accuracy ranking.
+ * Deep Intelligence Scanner: Uses Pro model for high-accuracy ranking from email content.
  */
 export const analyzeJobsWithAi = async (html: string, resume: string, token: string) => {
     const ai = getAi();
@@ -52,7 +55,7 @@ export const analyzeJobsWithAi = async (html: string, resume: string, token: str
 export const generateAudioBriefing = async (job: Job, profile: UserProfile): Promise<string> => {
     const ai = getAi();
     const prompt = `Say cheerfully: Hi ${profile.fullName}! I've analyzed the ${job.title} role at ${job.company}. 
-    Based on your experience, this is a ${job.matchScore}% match. I've prepared your tailored resume. Good luck!`;
+    Based on your experience, this is a ${job.matchScore}% match. I've prepared your tailored resume and cover letter. Good luck!`;
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -79,10 +82,10 @@ export const generateInterviewQuestions = async (job: Job, profile: UserProfile)
     const ai = getAi();
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Generate 3 mock interview questions for this job:
+        contents: `Generate 3 challenging mock interview questions for this specific job role.
         Role: ${job.title} at ${job.company}
-        Description: ${job.description.substring(0, 500)}
-        Candidate: ${profile.resumeContent.substring(0, 500)}`,
+        Description: ${job.description.substring(0, 1000)}
+        Candidate Background: ${profile.resumeContent.substring(0, 1000)}`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -92,7 +95,8 @@ export const generateInterviewQuestions = async (job: Job, profile: UserProfile)
                         type: Type.ARRAY,
                         items: { type: Type.STRING }
                     }
-                }
+                },
+                required: ["questions"]
             }
         }
     });
@@ -102,27 +106,75 @@ export const generateInterviewQuestions = async (job: Job, profile: UserProfile)
 };
 
 /**
- * Restored working extraction function via API.
+ * Robust Client-Side Job Extraction from URL.
+ * Uses Search Grounding to bypass parsing issues and read web content directly.
  */
 export const extractJobFromUrl = async (url: string, token: string): Promise<{data: any, sources: any[]}> => {
-    const response = await fetch('/api/extract-job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ url })
+    const ai = getAi();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Visit this URL and extract all job details: ${url}. 
+      I need the exact Job Title, Company Name, Location, Full Description, and key Requirements.`,
+      config: {
+        tools: [{googleSearch: {}}],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            company: { type: Type.STRING },
+            location: { type: Type.STRING },
+            description: { type: Type.STRING },
+            requirements: { type: Type.STRING }
+          },
+          required: ["title", "company", "description"]
+        }
+      }
     });
-    const result = await response.json();
-    return { data: result.data, sources: result.sources || [] };
+
+    const data = JSON.parse(response.text || "{}");
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+    return { data, sources };
 };
 
-// Added missing searchNearbyJobs function to fix the error in components/JobMap.tsx
+/**
+ * Search nearby jobs using Maps grounding.
+ */
 export const searchNearbyJobs = async (lat: number, lng: number, role: string, token: string): Promise<Job[]> => {
-    const response = await fetch('/api/search-nearby', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ lat, lng, role })
+    const ai = getAi();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Find hiring companies and job openings for "${role}" near my coordinates.`,
+      config: {
+        tools: [{googleMaps: {}}],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: {
+              latitude: lat,
+              longitude: lng
+            }
+          }
+        }
+      },
     });
-    const result = await response.json();
-    return result.jobs || [];
+
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const jobs = chunks.filter(c => c.maps).map((c, i) => ({
+      id: `map-${i}-${Date.now()}`,
+      title: role,
+      company: c.maps?.title || 'Local Company',
+      location: 'Nearby',
+      description: 'Found via Maps discovery.',
+      source: 'Google Maps' as const,
+      detectedAt: new Date().toISOString(),
+      status: JobStatus.DETECTED,
+      matchScore: 85,
+      applicationUrl: c.maps?.uri || '#',
+      requirements: []
+    }));
+
+    return jobs;
 };
 
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string, token: string) => {

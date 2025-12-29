@@ -34,7 +34,8 @@ export interface Job {
   location: string;
   salaryRange?: string;
   description: string;
-  source: 'Gmail' | 'LinkedIn' | 'Indeed' | 'Imported Link';
+  // Updated source type to include 'Google Maps' and 'Manual' to support discovery features and manual entry.
+  source: 'Gmail' | 'LinkedIn' | 'Indeed' | 'Imported Link' | 'Google Maps' | 'Manual';
   detectedAt: string; 
   status: JobStatus;
   matchScore: number; 

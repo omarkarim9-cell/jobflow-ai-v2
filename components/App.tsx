@@ -12,7 +12,6 @@ import { DebugView } from './DebugView';
 import { AddJobModal } from './AddJobModal';
 import { AutomationModal } from './AutomationModal';
 import { NotificationToast, NotificationType } from './NotificationToast';
-import { LanguageCode } from '../services/localization';
 import { 
   fetchJobsFromDb, 
   getUserProfile, 
@@ -31,10 +30,10 @@ import {
   LogOut,
   X,
   Plus,
-  AlertCircle,
   Terminal,
   RefreshCw,
-  WifiOff
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { JobDetail } from './JobDetail';
 
@@ -68,31 +67,12 @@ export const App: React.FC = () => {
           showNotification("Offline mode. Database sync paused.", "error");
           return;
       }
-
       setIsSyncing(true);
       try {
           const token = await getToken();
-          if (!token) { 
-              setLoading(false); 
-              setIsSyncing(false);
-              return; 
-          }
-
+          if (!token) { setLoading(false); setIsSyncing(false); return; }
           const profile = await getUserProfile(token);
           if (profile) setUserProfile(profile);
-          else if (user) {
-              const newProfile: UserProfile = {
-                  id: user.id,
-                  fullName: user.fullName || '',
-                  email: user.primaryEmailAddress?.emailAddress || '',
-                  phone: '', resumeContent: '', onboardedAt: new Date().toISOString(),
-                  preferences: { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' },
-                  connectedAccounts: [], plan: 'pro'
-              };
-              await saveUserProfile(newProfile, token);
-              setUserProfile(newProfile);
-          }
-
           const dbJobs = await fetchJobsFromDb(token);
           setJobs(dbJobs);
           if (isManual) showNotification("Workspace synced.", "success");
@@ -102,7 +82,7 @@ export const App: React.FC = () => {
           setLoading(false);
           setIsSyncing(false);
       }
-  }, [getToken, user, showNotification]);
+  }, [getToken, showNotification]);
 
   useEffect(() => {
     const handleOnline = () => { setIsOnline(true); syncData(); };
@@ -117,72 +97,33 @@ export const App: React.FC = () => {
     };
   }, [isLoaded, isSignedIn, syncData]);
 
-  const handleUpdateProfile = useCallback(async (updated: UserProfile) => {
-    setUserProfile(updated);
-    const token = await getToken();
-    if (token) await saveUserProfile(updated, token);
-  }, [getToken]);
-
   const handleUpdateJob = useCallback(async (updated: Job) => {
     setJobs(prev => prev.map(j => j.id === updated.id ? updated : j));
     const token = await getToken();
     if (token) await saveJobToDb(updated, token);
   }, [getToken]);
 
-  const handleAutoApply = useCallback(async (job: Job) => {
-    if (!userProfile?.resumeContent || userProfile.resumeContent.length < 50) {
-        showNotification("Configure your resume in Settings first.", "error");
-        return;
-    }
-    setApplyingJobId(job.id);
-  }, [userProfile, showNotification]);
-
-  const handleAddJob = useCallback(async (job: Job) => {
-    setJobs(prev => [job, ...prev]);
-    const token = await getToken();
-    if (token) await saveJobToDb(job, token);
-    showNotification("Job lead added.", "success");
-  }, [getToken, showNotification]);
-
-  const toggleCheck = useCallback((id: string) => {
-      // Functional update to avoid dependencies
-  }, []);
-
   const currentSelectedJob = useMemo(() => jobs.find(j => j.id === selectedJobId), [jobs, selectedJobId]);
   const applyingJob = useMemo(() => jobs.find(j => j.id === applyingJobId), [jobs, applyingJobId]);
   const isResumeMissing = !userProfile?.resumeContent || userProfile.resumeContent.length < 50;
 
   if (!isLoaded || (isSignedIn && loading && !userProfile)) {
-    return (
-        <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2"/>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Flow...</p>
-        </div>
-    );
+    return <div className="h-screen flex flex-col items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2"/><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Flow...</p></div>;
   }
-
   if (!isSignedIn) return <Auth onLogin={() => {}} onSwitchToSignup={() => {}} />;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
       {notification && <NotificationToast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
-      
-      <AddJobModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={handleAddJob} />
-      
-      {applyingJob && (
-          <AutomationModal 
-            isOpen={!!applyingJobId} job={applyingJob} userProfile={userProfile!} 
-            onClose={() => setApplyingJobId(null)} 
-            onComplete={() => { handleUpdateJob({...applyingJob, status: JobStatus.APPLIED_AUTO}); }}
-          />
-      )}
+      <AddJobModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={(j) => { setJobs(p => [j, ...p]); handleUpdateJob(j); }} />
+      {applyingJob && <AutomationModal isOpen={!!applyingJobId} job={applyingJob} userProfile={userProfile!} onClose={() => setApplyingJobId(null)} onComplete={() => handleUpdateJob({...applyingJob, status: JobStatus.APPLIED_AUTO})} />}
 
       <aside className="w-64 bg-white border-e border-slate-200 flex flex-col shrink-0 z-20">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center relative shadow-lg shadow-indigo-100">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center relative shadow-lg">
                 <Briefcase className="text-white w-5 h-5" />
-                {isSyncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full flex items-center justify-center shadow-sm"><RefreshCw className="w-2 h-2 text-indigo-600 animate-spin" /></div>}
+                {isSyncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full flex items-center justify-center"><RefreshCw className="w-2 h-2 text-indigo-600 animate-spin" /></div>}
             </div>
             <span className="font-bold text-xl text-slate-900 tracking-tight">JobFlow</span>
           </div>
@@ -190,46 +131,62 @@ export const App: React.FC = () => {
         </div>
         <div className="flex-1 px-4 py-2 overflow-y-auto custom-scrollbar">
           <button onClick={() => setCurrentView(ViewState.DASHBOARD)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.DASHBOARD ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><LayoutDashboard className="w-5 h-5 me-3" /> Dashboard</button>
-          <button onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><SearchIcon className="w-5 h-5 me-3" /> Scanned Jobs</button>
+          <button onClick={() => setCurrentView(ViewState.SELECTED_JOBS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SELECTED_JOBS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><SearchIcon className="w-5 h-5 me-3" /> Scanned Leads</button>
           <button onClick={() => setCurrentView(ViewState.TRACKER)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.TRACKER ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><List className="w-5 h-5 me-3" /> Applications</button>
           <button onClick={() => setCurrentView(ViewState.EMAILS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.EMAILS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><Mail className="w-5 h-5 me-3" /> Inbox Scanner</button>
           <div className="my-2 border-t border-slate-100" />
           <button onClick={() => setCurrentView(ViewState.SETTINGS)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mb-1 transition-all ${currentView === ViewState.SETTINGS ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><SettingsIcon className="w-5 h-5 me-3" /> Settings</button>
-          <button onClick={() => syncData(true)} disabled={isSyncing || !isOnline} className="w-full flex items-center px-3 py-2.5 rounded-lg mt-1 text-slate-500 hover:bg-slate-50 disabled:opacity-30"><RefreshCw className={`w-5 h-5 me-3 ${isSyncing ? 'animate-spin' : ''}`} /> Sync Now</button>
           {isOwner && <button onClick={() => setCurrentView(ViewState.DEBUG)} className={`w-full flex items-center px-3 py-2.5 rounded-lg mt-4 ${currentView === ViewState.DEBUG ? 'bg-slate-900 text-white font-bold' : 'text-slate-400 hover:bg-slate-100'}`}><Terminal className="w-5 h-5 me-3" /> Dev Console</button>}
         </div>
         <div className="p-4 border-t border-slate-200"><button onClick={() => signOut()} className="w-full flex items-center px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-600 font-bold text-xs uppercase tracking-widest"><LogOut className="w-4 h-4 me-3" /> Sign Out</button></div>
       </aside>
       
       <main className="flex-1 overflow-hidden relative flex flex-col">
-        {!isOnline && <div className="bg-amber-500 text-white px-6 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest animate-in slide-in-from-top"><span>Connection lost. Cloud sync paused.</span> <button onClick={() => syncData(true)} className="border border-white/30 px-3 py-1 rounded-lg">Reconnect</button></div>}
+        {!isOnline && <div className="bg-amber-500 text-white px-6 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest animate-in slide-in-from-top"><span>Connection lost. Cloud sync paused.</span></div>}
 
         <div className="flex-1 overflow-hidden relative">
             {currentView === ViewState.DASHBOARD && (
                 <div className="h-full overflow-y-auto p-8">
-                    {isResumeMissing && <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-[2rem] flex items-center justify-between shadow-sm animate-in fade-in duration-500"><div><h3 className="text-sm font-black text-amber-900 uppercase">Resume Missing</h3><p className="text-xs text-amber-700 mt-0.5">Configure in Settings to unlock AI features.</p></div><button onClick={() => setCurrentView(ViewState.SETTINGS)} className="px-6 py-3 bg-white border border-amber-200 text-amber-700 rounded-xl text-xs font-black uppercase">Setup Now</button></div>}
+                    {isResumeMissing && (
+                        <div className="mb-8 p-8 bg-indigo-600 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-indigo-100 animate-in fade-in duration-700 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-white/10 transition-all duration-1000"></div>
+                            <div className="flex items-center gap-6 z-10">
+                                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20">
+                                    <Sparkles className="w-8 h-8 text-white" />
+                                </div>
+                                <div className="text-white">
+                                    <h3 className="text-xl font-black uppercase tracking-tight">Complete Your AI Profile</h3>
+                                    <p className="text-sm font-medium opacity-80 mt-1 max-w-lg">Unlock deep intelligence features like document tailoring and interview briefings by uploading your master resume.</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setCurrentView(ViewState.SETTINGS)} 
+                                className="z-10 px-8 py-4 bg-white text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-all flex items-center gap-2 group/btn"
+                            >
+                                Get Started <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
+                    )}
                     <DashboardStats jobs={jobs} userProfile={userProfile!} />
                 </div>
             )}
             
             {currentView === ViewState.SELECTED_JOBS && (
                 <div className="h-full overflow-y-auto p-8">
-                    <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Leads</h2><button onClick={() => setIsAddModalOpen(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase flex items-center gap-2 shadow-xl shadow-indigo-100"><Plus className="w-4 h-4" /> Add Lead</button></div>
+                    <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black text-slate-900 tracking-tight">Scanned Leads</h2><button onClick={() => setIsAddModalOpen(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase flex items-center gap-2 shadow-xl"><Plus className="w-4 h-4" /> Add Lead</button></div>
                     {jobs.filter(j => j.status === JobStatus.DETECTED).length === 0 ? (
                         <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400"><SearchIcon className="w-10 h-10 mb-4 opacity-20" /><p className="font-bold text-xs uppercase tracking-widest text-center">No leads found.</p></div>
                     ) : (
                         jobs.filter(j => j.status === JobStatus.DETECTED).map(j => (
-                            <JobCard key={j.id} job={j} onClick={setSelectedJobId.bind(null, j.id)} isSelected={selectedJobId === j.id} isChecked={false} onToggleCheck={toggleCheck} onAutoApply={(e, job) => handleAutoApply(job)} />
+                            <JobCard key={j.id} job={j} onClick={setSelectedJobId.bind(null, j.id)} isSelected={selectedJobId === j.id} isChecked={false} onToggleCheck={() => {}} onAutoApply={(e, job) => setApplyingJobId(job.id)} />
                         ))
                     )}
                 </div>
             )}
 
-            {/* Fixed: Wrapped handleUpdateJob to match (id, status) signature */}
             {currentView === ViewState.TRACKER && <ApplicationTracker jobs={jobs} onUpdateStatus={async (id, s) => { const job = jobs.find(j => j.id === id); if (job) handleUpdateJob({...job, status: s}); }} onDelete={async (id) => { setJobs(prev => prev.filter(j => j.id !== id)); const token = await getToken(); if (token) await deleteJobFromDb(id, token); }} onSelect={(j) => setSelectedJobId(j.id)} />}
-            {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={handleUpdateProfile} dirHandle={null} onDirHandleChange={() => {}} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} isOwner={isOwner} /></div>}
-            {currentView === ViewState.DEBUG && isOwner && <div className="h-full overflow-y-auto bg-slate-50"><DebugView /></div>}
-            {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={(newJobs) => { setJobs(prev => [...newJobs, ...prev]); }} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} /></div>}
+            {currentView === ViewState.SETTINGS && <div className="h-full p-8 overflow-y-auto"><Settings userProfile={userProfile!} onUpdate={(p) => { setUserProfile(p); saveUserProfile(p, ''); }} dirHandle={null} onDirHandleChange={() => {}} jobs={jobs} showNotification={showNotification} onReset={() => signOut()} isOwner={isOwner} /></div>}
+            {currentView === ViewState.EMAILS && <div className="h-full p-6"><InboxScanner onImport={(newJobs) => { setJobs(prev => [...newJobs, ...prev]); newJobs.forEach(handleUpdateJob); }} sessionAccount={sessionAccount} onConnectSession={setSessionAccount} onDisconnectSession={() => setSessionAccount(null)} showNotification={showNotification} userPreferences={userProfile?.preferences} resumeContent={userProfile?.resumeContent} /></div>}
             
             {selectedJobId && currentSelectedJob && (
                 <div className="absolute inset-0 z-50 bg-slate-50 overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">

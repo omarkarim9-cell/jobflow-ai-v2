@@ -154,7 +154,7 @@ export const JobCard: React.FC<JobCardProps> = memo(({ job, onClick, isSelected,
                     className="text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl border border-indigo-600 flex items-center transition-all shadow-lg shadow-indigo-100"
                   >
                     <Sparkles className="w-3.5 h-3.5 me-2" />
-                    Tailor Profile
+                    Generate Assets
                   </button>
                 </div>
             )}
