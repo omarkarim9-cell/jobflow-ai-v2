@@ -1,46 +1,82 @@
-
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import * as ClerkServer from '@clerk/nextjs/server';
 import { neon } from '@neondatabase/serverless';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+let sql: any = null;
+const getSql = () => {
+  if (!sql) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is not set');
+    }
+    sql = neon(process.env.DATABASE_URL);
+  }
+  return sql;
+};
+
+async function verifyClerkToken(authHeader: string | undefined): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.error('[PROFILE] No auth header or invalid format');
+    return null;
+  }
+  
+  const token = authHeader.substring(7);
+  
   try {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      return res.status(500).json({ error: 'DATABASE_URL is missing.' });
+    // Decode JWT manually (faster than API call)
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      console.error('[PROFILE] Invalid JWT format');
+      return null;
     }
-
-    let userId: string | null = null;
     
-    // Attempt 1: Check manual header first (reliable for Lab/Tester)
-    userId = req.headers['x-clerk-user-id'] as string || null;
-
-    // Attempt 2: Clerk SDK (standard app flow)
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+    const userId = payload.sub || payload.user_id || payload.userId;
+    
     if (!userId) {
-      try {
-        const Clerk = (ClerkServer as any).default || ClerkServer;
-        // Check if we are in a Vercel Node context where getAuth might need the request
-        const auth = Clerk.getAuth(req);
-        userId = auth?.userId;
-      } catch (authError) {
-        console.warn('[API/PROFILE] Clerk SDK session detection skipped or failed.');
-      }
+      console.error('[PROFILE] No userId in JWT payload');
+      return null;
+    }
+    
+    console.log('[PROFILE] Extracted userId:', userId);
+    return userId;
+  } catch (error: any) {
+    console.error('[PROFILE] Token decode error:', error.message);
+    return null;
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  try {
+    const userId = await verifyClerkToken(req.headers.authorization as string);
+    
+    if (!userId) {
+      console.error('[PROFILE] Authentication failed');
+      return res.status(401).json({ error: 'Unauthorized: Invalid or missing token' });
     }
 
-    if (!userId) {
-      return res.status(401).json({ 
-        error: 'Unauthorized', 
-        details: 'No User ID found in session or x-clerk-user-id header.' 
-      });
-    }
+    console.log('[PROFILE] Request from user:', userId, 'Method:', req.method);
 
-    const sql = neon(dbUrl);
+    const sql = getSql();
 
     if (req.method === 'GET') {
       const result = await sql`SELECT * FROM profiles WHERE id = ${userId}`;
-      if (result.length === 0) return res.status(404).json({ error: 'Profile not found.' });
       
+      if (result.length === 0) {
+        console.log('[PROFILE] Profile not found for:', userId);
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+
       const p = result[0];
+      console.log('[PROFILE] Profile fetched successfully');
+      
       return res.status(200).json({
         id: p.id,
         fullName: p.full_name,
@@ -51,49 +87,94 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         preferences: typeof p.preferences === 'string' ? JSON.parse(p.preferences) : p.preferences,
         connectedAccounts: p.connected_accounts || [],
         plan: p.plan || 'free',
+        subscriptionExpiry: p.subscription_expiry,
         onboardedAt: p.created_at || p.updated_at
       });
     }
 
     if (req.method === 'POST') {
       const body = req.body;
-      if (!body) return res.status(400).json({ error: 'Empty request body.' });
+      if (!body) {
+        return res.status(400).json({ error: 'Empty request body' });
+      }
+
+      console.log('[PROFILE] Saving profile for:', userId);
 
       const prefs = typeof body.preferences === 'string' ? body.preferences : JSON.stringify(body.preferences || {});
       const accounts = typeof body.connectedAccounts === 'string' ? body.connectedAccounts : JSON.stringify(body.connectedAccounts || []);
 
-      const result = await sql`
-        INSERT INTO profiles (id, email, full_name, phone, resume_content, resume_file_name, preferences, connected_accounts, plan, updated_at)
-        VALUES (
-          ${userId}, 
-          ${body.email || ''}, 
-          ${body.fullName || ''}, 
-          ${body.phone || ''}, 
-          ${body.resumeContent || ''}, 
-          ${body.resumeFileName || ''}, 
-          ${prefs}, 
-          ${accounts}, 
-          ${body.plan || 'free'}, 
-          NOW()
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          email = EXCLUDED.email,
-          full_name = EXCLUDED.full_name,
-          phone = EXCLUDED.phone,
-          resume_content = EXCLUDED.resume_content,
-          resume_file_name = EXCLUDED.resume_file_name,
-          preferences = EXCLUDED.preferences,
-          connected_accounts = EXCLUDED.connected_accounts,
-          plan = EXCLUDED.plan,
-          updated_at = NOW()
-        RETURNING *
-      `;
-      return res.status(200).json(result[0]);
+      const existing = await sql`SELECT id FROM profiles WHERE id = ${userId}`;
+
+      if (existing.length === 0) {
+        const result = await sql`
+          INSERT INTO profiles (id, email, full_name, phone, resume_content, resume_file_name, preferences, connected_accounts, plan, updated_at)
+          VALUES (
+            ${userId}, 
+            ${body.email || ''}, 
+            ${body.fullName || body.full_name || ''}, 
+            ${body.phone || ''}, 
+            ${body.resumeContent || body.resume_content || ''}, 
+            ${body.resumeFileName || body.resume_file_name || ''}, 
+            ${prefs}, 
+            ${accounts}, 
+            ${body.plan || 'free'}, 
+            NOW()
+          )
+          RETURNING *
+        `;
+        
+        const saved = result[0];
+        console.log('[PROFILE] Profile created successfully');
+        
+        return res.status(200).json({
+          id: saved.id,
+          fullName: saved.full_name,
+          email: saved.email,
+          phone: saved.phone || '',
+          resumeContent: saved.resume_content,
+          resumeFileName: saved.resume_file_name || '',
+          preferences: typeof saved.preferences === 'string' ? JSON.parse(saved.preferences) : saved.preferences,
+          connectedAccounts: saved.connected_accounts || [],
+          plan: saved.plan || 'free',
+          onboardedAt: saved.updated_at
+        });
+      } else {
+        const result = await sql`
+          UPDATE profiles SET
+            email = ${body.email || ''},
+            full_name = ${body.fullName || body.full_name || ''},
+            phone = ${body.phone || ''},
+            resume_content = ${body.resumeContent || body.resume_content || ''},
+            resume_file_name = ${body.resumeFileName || body.resume_file_name || ''},
+            preferences = ${prefs},
+            connected_accounts = ${accounts},
+            plan = ${body.plan || 'free'},
+            updated_at = NOW()
+          WHERE id = ${userId}
+          RETURNING *
+        `;
+
+        const saved = result[0];
+        console.log('[PROFILE] Profile updated successfully');
+        
+        return res.status(200).json({
+          id: saved.id,
+          fullName: saved.full_name,
+          email: saved.email,
+          phone: saved.phone || '',
+          resumeContent: saved.resume_content,
+          resumeFileName: saved.resume_file_name || '',
+          preferences: typeof saved.preferences === 'string' ? JSON.parse(saved.preferences) : saved.preferences,
+          connectedAccounts: saved.connected_accounts || [],
+          plan: saved.plan || 'free',
+          onboardedAt: saved.updated_at
+        });
+      }
     }
 
     return res.status(405).json({ error: 'Method Not Allowed' });
   } catch (error: any) {
-    console.error('[API/PROFILE] Fatal Crash:', error.message);
-    return res.status(500).json({ error: 'API Execution Error', details: error.message });
+    console.error('[PROFILE] Error:', error.message, error.stack);
+    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 }
