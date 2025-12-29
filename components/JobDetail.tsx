@@ -12,11 +12,8 @@ import {
     ChevronDown,
     Building2,
     MapPin,
-    Calendar,
-    CheckCircle2,
     Volume2,
     Play,
-    Pause,
     BrainCircuit,
     ListChecks
 } from 'lucide-react';
@@ -40,13 +37,13 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
   const { getToken } = useAuth();
   
   const audioContextRef = useRef<AudioContext | null>(null);
-  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const notify = (msg: string, type: NotificationType) => {
       if (showNotification) showNotification(msg, type);
   };
 
-  const decode = (base64: string) => {
+  // Raw PCM Decoding Helpers
+  const decodeBase64 = (base64: string) => {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
@@ -59,11 +56,12 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
     const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
     for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-      }
+        const channelData = buffer.getChannelData(channel);
+        for (let i = 0; i < frameCount; i++) {
+            channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+        }
     }
     return buffer;
   }
@@ -73,17 +71,21 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     setIsAudioLoading(true);
     try {
         const base64 = await generateAudioBriefing(job, userProfile);
-        if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+        }
         
-        const audioBuffer = await decodeAudioData(decode(base64), audioContextRef.current, 24000, 1);
+        const rawData = decodeBase64(base64);
+        const audioBuffer = await decodeAudioData(rawData, audioContextRef.current, 24000, 1);
+        
         const source = audioContextRef.current.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioContextRef.current.destination);
         source.start();
-        audioSourceRef.current = source;
         notify("Briefing is playing...", "success");
     } catch (e) {
-        notify("Audio generation failed.", "error");
+        console.error(e);
+        notify("Audio playback failed.", "error");
     } finally {
         setIsAudioLoading(false);
     }
@@ -94,7 +96,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     try {
         const qs = await generateInterviewQuestions(job, userProfile);
         setQuestions(qs);
-        notify("Mock interview questions ready!", "success");
+        notify("Practice questions generated!", "success");
     } catch (e) {
         notify("Failed to generate questions.", "error");
     } finally {
@@ -116,9 +118,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
             generateCoverLetter(job.title, job.company, job.description, userProfile.resumeContent, userProfile.fullName, userProfile.email, token)
         ]);
         await onUpdateJob({ ...job, customizedResume: finalResume, coverLetter: finalLetter, status: JobStatus.SAVED });
-        notify("Assets ready!", "success");
+        notify("AI Assets tailored!", "success");
     } catch (e) {
-        notify("Generation failed.", "error");
+        notify("Asset generation failed.", "error");
     } finally {
         setIsGenerating(false);
     }
@@ -175,7 +177,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                     <Volume2 className="w-5 h-5 opacity-40" />
                 </div>
                 <p className="text-sm font-medium leading-relaxed mb-6 opacity-80 italic pe-8">
-                    "Hi {userProfile.fullName}, I've analyzed this role. It matches your background in ${userProfile.preferences.targetRoles[0] || 'engineering'} perfectly..."
+                    "Hi {userProfile.fullName}, I've analyzed this role. It matches your background perfectly. Let's listen to the key points..."
                 </p>
                 <button 
                     onClick={handlePlayBriefing}
@@ -201,7 +203,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                             </div>
                         ))
                     ) : (
-                        <p className="text-xs text-slate-400 italic">Generate 3 custom mock questions for this role based on your experience.</p>
+                        <p className="text-xs text-slate-400 italic">Generate mock questions based on your profile for this specific role.</p>
                     )}
                 </div>
                 <button 
@@ -210,7 +212,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
                     className="mt-6 flex items-center gap-3 px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
                 >
                     {isInterviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}
-                    Prepare Me
+                    Generate Questions
                 </button>
             </div>
         </div>

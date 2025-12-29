@@ -12,7 +12,6 @@ import { DebugView } from './components/DebugView';
 import { AddJobModal } from './components/AddJobModal';
 import { AutomationModal } from './AutomationModal';
 import { NotificationToast, NotificationType } from './components/NotificationToast';
-import { LanguageCode } from './services/localization';
 import { 
   fetchJobsFromDb, 
   getUserProfile, 
@@ -31,7 +30,6 @@ import {
   LogOut,
   X,
   Plus,
-  AlertCircle,
   Terminal,
   RefreshCw
 } from 'lucide-react';

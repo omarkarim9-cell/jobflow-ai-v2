@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, JobStatus, EmailAccount, UserPreferences } from '../types';
-import { Mail, Search, AlertCircle, RefreshCw, X, Loader2, StopCircle, BrainCircuit, Zap, Clock } from 'lucide-react';
+import { Mail, Search, X, Loader2, StopCircle, BrainCircuit, Zap, Clock } from 'lucide-react';
 import { localExtractJobs } from '../services/localAiService';
-// Fix: analyzeJobsWithAi is exported from geminiService, not gmailService
 import { getMessageBody, decodeEmailBody, listMessages } from '../services/gmailService';
 import { analyzeJobsWithAi } from '../services/geminiService';
 import { NotificationType } from './NotificationToast';
@@ -28,7 +27,6 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
     onDisconnectSession = () => {},
     resumeContent = ""
 }) => {
-  const [emails, setEmails] = useState<any[]>([]); 
   const [isScanning, setIsScanning] = useState(false);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
@@ -46,7 +44,7 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
       setProgress('Stopped');
   };
 
-  const handleBatchAnalyze = async (emailList = emails) => {
+  const handleBatchAnalyze = async (emailList: any[]) => {
       if (emailList.length === 0) return;
       setIsBatchProcessing(true);
       abortController.current = new AbortController();
@@ -59,15 +57,15 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
               const chunk = emailList.slice(i, i + batchSize);
               
               await Promise.all(chunk.map(async (email) => {
-                  if (!email.accessToken) return;
+                  if (!sessionAccount?.accessToken) return;
                   try {
-                      const bodyData = await getMessageBody(email.accessToken, email.id);
+                      const bodyData = await getMessageBody(sessionAccount.accessToken, email.id);
                       const htmlContent = decodeEmailBody(bodyData);
                       
                       let extracted: any[] = [];
                       if (scanMode === 'ai') {
                           setProgress(`AI Reasoning... ${email.id.substring(0, 5)}`);
-                          extracted = await analyzeJobsWithAi(htmlContent, resumeContent, email.accessToken);
+                          extracted = await analyzeJobsWithAi(htmlContent, resumeContent, sessionAccount.accessToken);
                       } else {
                           extracted = localExtractJobs(htmlContent, userPreferences?.targetRoles || []);
                       }
@@ -76,13 +74,16 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
                           if (job.applicationUrl && !uniqueJobsMap.has(job.applicationUrl)) {
                                 uniqueJobsMap.set(job.applicationUrl, { 
                                     ...job, 
+                                    id: `gmail-${email.id}-${Math.random().toString(36).substr(2, 5)}`,
                                     source: 'Gmail', 
                                     detectedAt: new Date().toISOString(),
                                     status: JobStatus.DETECTED 
                                 });
                           }
                       });
-                  } catch (e) {}
+                  } catch (e) {
+                      console.error("Batch error:", e);
+                  }
               }));
               
               setProgress(`${Math.min(i + batchSize, emailList.length)} / ${emailList.length}`);
@@ -106,21 +107,13 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
           return;
       }
       setIsScanning(true);
-      setEmails([]);
       try {
           const query = `subject:(job OR hiring OR role OR position) newer_than:${dateRange}d`;
-          const messages = await listMessages(sessionAccount.accessToken, 30, query);
-          const realEmails = messages.map((msg: any) => ({
-              id: msg.id,
-              from: 'Gmail Scanner',
-              subject: `Lead Insight ${msg.id.substring(0,6)}`,
-              accessToken: sessionAccount.accessToken
-          }));
-          setEmails(realEmails);
-          if (realEmails.length > 0) await handleBatchAnalyze(realEmails);
+          const messages = await listMessages(sessionAccount.accessToken, 20, query);
+          if (messages.length > 0) await handleBatchAnalyze(messages);
           else showNotification("No new results in this timeframe.", 'success');
       } catch (e) {
-          showNotification("Scan failed. Check token.", "error");
+          showNotification("Scan failed. Token might be expired.", "error");
       } finally {
           setIsScanning(false);
       }

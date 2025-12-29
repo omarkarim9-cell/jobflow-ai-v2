@@ -1,12 +1,11 @@
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-// Import missing types from types.ts
 import { Job, UserProfile, JobStatus } from "../types";
 
-const getAi = () => new GoogleGenAI({ apiKey: (window as any).process?.env?.API_KEY });
+const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Deep Intelligence Scanner: Ranks and analyzes jobs from email text.
+ * Deep Intelligence Scanner: Uses Pro model for high-accuracy ranking.
  */
 export const analyzeJobsWithAi = async (html: string, resume: string, token: string) => {
     const ai = getAi();
@@ -16,8 +15,8 @@ export const analyzeJobsWithAi = async (html: string, resume: string, token: str
         User Resume: ${resume.substring(0, 2000)}
         Email HTML: ${html.substring(0, 15000)}
         
-        TASK: Extract specific job listings. Score each from 0-100 based on how well it matches the user's resume and target role. 
-        Provide a concise "fitReason" for each.`,
+        TASK: Extract job listings. Rank each 0-100 by fit against the resume. 
+        Provide a concise "fitReason".`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -48,15 +47,12 @@ export const analyzeJobsWithAi = async (html: string, resume: string, token: str
 };
 
 /**
- * Generates an audio briefing using Gemini TTS.
+ * Generates an audio briefing using Gemini TTS (PCM output).
  */
-// Fix: Profile was missing UserProfile type in scope
 export const generateAudioBriefing = async (job: Job, profile: UserProfile): Promise<string> => {
     const ai = getAi();
     const prompt = `Say cheerfully: Hi ${profile.fullName}! I've analyzed the ${job.title} role at ${job.company}. 
-    Based on your experience with ${profile.preferences.targetRoles[0] || 'software development'}, this is a ${job.matchScore}% match. 
-    The core requirements include ${job.requirements.slice(0, 2).join(' and ') || 'the skills listed in your profile'}. 
-    I've prepared your tailored resume and cover letter. Good luck!`;
+    Based on your experience, this is a ${job.matchScore}% match. I've prepared your tailored resume. Good luck!`;
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -79,14 +75,14 @@ export const generateAudioBriefing = async (job: Job, profile: UserProfile): Pro
 /**
  * Generates mock interview questions.
  */
-// Fix: Profile was missing UserProfile type in scope
 export const generateInterviewQuestions = async (job: Job, profile: UserProfile) => {
     const ai = getAi();
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Based on the following job and user profile, generate 3 challenging interview questions.
+        contents: `Generate 3 mock interview questions for this job:
         Role: ${job.title} at ${job.company}
-        Candidate Resume: ${profile.resumeContent.substring(0, 1000)}`,
+        Description: ${job.description.substring(0, 500)}
+        Candidate: ${profile.resumeContent.substring(0, 500)}`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -106,8 +102,29 @@ export const generateInterviewQuestions = async (job: Job, profile: UserProfile)
 };
 
 /**
- * Generates tailored assets.
+ * Restored working extraction function via API.
  */
+export const extractJobFromUrl = async (url: string, token: string): Promise<{data: any, sources: any[]}> => {
+    const response = await fetch('/api/extract-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ url })
+    });
+    const result = await response.json();
+    return { data: result.data, sources: result.sources || [] };
+};
+
+// Added missing searchNearbyJobs function to fix the error in components/JobMap.tsx
+export const searchNearbyJobs = async (lat: number, lng: number, role: string, token: string): Promise<Job[]> => {
+    const response = await fetch('/api/search-nearby', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ lat, lng, role })
+    });
+    const result = await response.json();
+    return result.jobs || [];
+};
+
 export const generateCoverLetter = async (title: string, company: string, description: string, resume: string, name: string, email: string, token: string) => {
     const response = await fetch('/api/cover-letter', {
         method: 'POST',
@@ -128,61 +145,10 @@ export const customizeResume = async (title: string, company: string, descriptio
     return result.text || "";
 };
 
-export const extractJobFromUrl = async (url: string, token: string): Promise<{data: any, sources: any[]}> => {
-    const response = await fetch('/api/extract-job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ url })
-    });
-    const result = await response.json();
-    return { data: result.data, sources: result.sources || [] };
-};
-
 export const getSmartApplicationUrl = (url: string, title: string, company: string): string => {
     try {
         const u = new URL(url);
         ['utm_source', 'utm_medium', 'utm_campaign'].forEach(p => u.searchParams.delete(p));
         return u.toString();
     } catch (e) { return url; }
-};
-
-// Fix: added missing searchNearbyJobs export for JobMap component
-/**
- * Searches for nearby jobs using Google Maps grounding.
- */
-export const searchNearbyJobs = async (lat: number, lng: number, role: string, token: string): Promise<Job[]> => {
-    const ai = getAi();
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Find hiring companies and job openings for "${role}" near my location.`,
-        config: {
-            tools: [{ googleMaps: {} }],
-            toolConfig: {
-                retrievalConfig: {
-                    latLng: {
-                        latitude: lat,
-                        longitude: lng
-                    }
-                }
-            }
-        },
-    });
-
-    // Process the grounding chunks into job objects
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const jobs: Job[] = chunks.filter(c => !!c.maps).map((c, i) => ({
-        id: `map-${i}-${Date.now()}`,
-        title: role,
-        company: c.maps?.title || 'Local Company',
-        location: 'Nearby',
-        description: 'Found via Maps discovery.',
-        source: 'Imported Link',
-        detectedAt: new Date().toISOString(),
-        status: JobStatus.DETECTED,
-        matchScore: 85,
-        requirements: [],
-        applicationUrl: c.maps?.uri || '#'
-    }));
-
-    return jobs;
 };
