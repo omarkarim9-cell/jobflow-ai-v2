@@ -53,49 +53,56 @@ export const App: React.FC = () => {
       setNotification({ message, type });
   }, []);
 
-  const syncData = useCallback(async () => {
-      setLoading(true);
-      try {
-          const token = await getToken();
-          if (!token) { 
-              setLoading(false); 
-              return; 
-          }
+ const syncData = useCallback(async () => {
+    setLoading(true);
+    try {
+        const token = await getToken();
+        if (!token) { 
+            setLoading(false); 
+            return; 
+        }
 
-          let profile = await getUserProfile(token);
-          
-          if (!profile && user) {
-              profile = {
-                  id: user.id,
-                  fullName: user.fullName || '',
-                  email: user.primaryEmailAddress?.emailAddress || '',
-                  phone: '',
-                  resumeContent: '',
-                  onboardedAt: new Date().toISOString(),
-                  preferences: {
-                      targetRoles: [],
-                      targetLocations: [],
-                      minSalary: '',
-                      remoteOnly: false,
-                      language: 'en'
-                  },
-                  connectedAccounts: [],
-                  plan: 'pro'
-              };
-              await saveUserProfile(profile, token);
-          }
-          
-          setUserProfile(profile);
+        let profile: UserProfile | null = null;
+        let dbJobs: Job[] = [];
 
-          const dbJobs = await fetchJobsFromDb(token);
-          setJobs(dbJobs);
-      } catch (e) {
-          console.error("Sync Error:", e);
-          showNotification("Using local offline data.", "success");
-      } finally {
-          setLoading(false);
-      }
-  }, [getToken, user, showNotification]);
+        // Try to fetch from DB, but don't crash if it fails
+        try {
+            profile = await getUserProfile(token);
+            dbJobs = await fetchJobsFromDb(token);
+        } catch (dbError) {
+            console.warn("Database not available, using local state:", dbError);
+            // Silently fail - use empty state
+        }
+        
+        if (!profile && user) {
+            profile = {
+                id: user.id,
+                fullName: user.fullName || '',
+                email: user.primaryEmailAddress?.emailAddress || '',
+                phone: '',
+                resumeContent: '',
+                onboardedAt: new Date().toISOString(),
+                preferences: {
+                    targetRoles: [],
+                    targetLocations: [],
+                    minSalary: '',
+                    remoteOnly: false,
+                    language: 'en'
+                },
+                connectedAccounts: [],
+                plan: 'pro'
+            };
+        }
+        
+        setUserProfile(profile);
+        setJobs(dbJobs);
+    } catch (e) {
+        console.error("Sync Error:", e);
+        showNotification("Using local offline data.", "success");
+    } finally {
+        setLoading(false);
+    }
+}, [getToken, user, showNotification]);
 
   useEffect(() => {
     if (isLoaded) {
