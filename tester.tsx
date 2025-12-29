@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/clerk-react";
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider, useUser, useAuth, UserButton } from '@clerk/clerk-react';
