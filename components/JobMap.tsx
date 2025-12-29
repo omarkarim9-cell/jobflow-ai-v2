@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { MapPin, Search, Loader2, Navigation, ExternalLink } from 'lucide-react';
 import { searchNearbyJobs } from '../services/geminiService';
 import { Job } from '../types';
@@ -10,6 +11,7 @@ interface JobMapProps {
 }
 
 export const JobMap: React.FC<JobMapProps> = ({ onImport, targetRole }) => {
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
   const [coords, setCoords] = useState<{lat: number, lng: number} | null>(null);
@@ -27,7 +29,11 @@ export const JobMap: React.FC<JobMapProps> = ({ onImport, targetRole }) => {
     if (!coords) return;
     setLoading(true);
     try {
-      const results = await searchNearbyJobs(coords.lat, coords.lng, targetRole || "Software Engineer");
+      // Fix: retrieve the auth token and pass it to searchNearbyJobs
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+
+      const results = await searchNearbyJobs(coords.lat, coords.lng, targetRole || "Software Engineer", token);
       setNearbyJobs(results);
     } catch (e) {
       console.error(e);

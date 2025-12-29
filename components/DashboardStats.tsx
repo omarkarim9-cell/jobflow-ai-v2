@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity, Search, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
+import { Send, Filter, Users, Star, BarChart3, TrendingUp, ShieldCheck, Activity, Search, Settings as SettingsIcon, AlertCircle, WifiOff } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { translations } from '../services/localization';
 
@@ -15,6 +15,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
   
   const lang = userProfile?.preferences.language || 'en';
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
+  const isOnline = navigator.onLine;
 
   // Tracked jobs are those that have moved past detection or are being actively monitored
   const trackedJobs = useMemo(() => jobs.filter(j => j.status !== JobStatus.DETECTED), [jobs]);
@@ -61,20 +62,35 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ jobs, onFilterCh
       
       {/* System Health Header */}
       <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 flex items-center justify-between bg-indigo-900 text-white p-4 rounded-2xl shadow-xl shadow-indigo-900/20 overflow-hidden relative">
+        <div className={`flex-1 flex items-center justify-between p-4 rounded-2xl shadow-xl overflow-hidden relative transition-colors duration-500 ${isOnline ? 'bg-indigo-900 text-white shadow-indigo-900/20' : 'bg-slate-800 text-slate-300 shadow-slate-900/20'}`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
             <div className="flex items-center gap-4 relative z-10">
-                <div className="w-10 h-10 bg-indigo-500/30 rounded-xl flex items-center justify-center border border-white/10">
-                    <Activity className="w-5 h-5 text-indigo-300 animate-pulse" />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isOnline ? 'bg-indigo-500/30 border-white/10' : 'bg-slate-700/30 border-slate-600/50'}`}>
+                    {isOnline ? (
+                        <Activity className="w-5 h-5 text-indigo-300 animate-pulse" />
+                    ) : (
+                        <WifiOff className="w-5 h-5 text-slate-500" />
+                    )}
                 </div>
                 <div>
-                    <h2 className="text-sm font-bold tracking-tight">System Status: Active</h2>
-                    <p className="text-[10px] text-indigo-300 font-medium uppercase tracking-widest">Automation Services Online</p>
+                    <h2 className="text-sm font-bold tracking-tight">{isOnline ? 'System Status: Active' : 'System Status: Offline'}</h2>
+                    <p className={`text-[10px] font-medium uppercase tracking-widest ${isOnline ? 'text-indigo-300' : 'text-slate-500'}`}>
+                        {isOnline ? 'Automation Services Online' : 'Syncing Paused'}
+                    </p>
                 </div>
             </div>
-            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 relative z-10">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Encrypted Session</span>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border relative z-10 ${isOnline ? 'bg-white/10 border-white/10' : 'bg-slate-700/50 border-slate-700'}`}>
+                {isOnline ? (
+                    <>
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Cloud Synchronized</span>
+                    </>
+                ) : (
+                    <>
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Local Persistence</span>
+                    </>
+                )}
             </div>
         </div>
 

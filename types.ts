@@ -23,6 +23,7 @@ export enum ViewState {
   REVIEW_SELECTION = 'REVIEW_SELECTION',
   GENERATED_JOBS_LIST = 'GENERATED_JOBS_LIST',
   ONBOARDING = 'ONBOARDING',
+  INTERVIEW_PREP = 'INTERVIEW_PREP',
   DEBUG = 'DEBUG'
 }
 
@@ -37,6 +38,7 @@ export interface Job {
   detectedAt: string; 
   status: JobStatus;
   matchScore: number; 
+  fitReason?: string;
   requirements: string[];
   coverLetter?: string;
   customizedResume?: string; 

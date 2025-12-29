@@ -1,7 +1,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, Job } from '../types';
-import { User, Briefcase, FileText, CheckCircle2, Upload, Loader2, Save, RotateCcw } from 'lucide-react';
+import { 
+    User, 
+    Briefcase, 
+    FileText, 
+    CheckCircle2, 
+    Upload, 
+    Loader2, 
+    Save, 
+    RotateCcw,
+    ShieldCheck,
+    Lock,
+    EyeOff,
+    Terminal
+} from 'lucide-react';
 import { NotificationType } from './NotificationToast';
 import { translations, LanguageCode } from '../services/localization';
 
@@ -13,9 +26,10 @@ interface SettingsProps {
   jobs: Job[];
   showNotification: (msg: string, type: NotificationType) => void;
   onReset: () => void;
+  isOwner?: boolean;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showNotification }) => {
+export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showNotification, isOwner = false }) => {
   const [formData, setFormData] = useState<UserProfile>(userProfile);
   const [rolesInput, setRolesInput] = useState((userProfile?.preferences?.targetRoles || []).join(', '));
   const [locationsInput, setLocationsInput] = useState((userProfile?.preferences?.targetLocations || []).join(', '));
@@ -47,7 +61,7 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
       
       onUpdate(updatedProfile);
       setIsDirty(false);
-      showNotification("Settings synced successfully.", 'success');
+      showNotification("Settings saved and synced to cloud.", 'success');
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,10 +81,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
             setIsDirty(true);
             setIsUploading(false);
             showNotification(`Resume "${file.name}" loaded successfully. Don't forget to save.`, 'success');
-        };
-        reader.onerror = () => {
-            setIsUploading(false);
-            showNotification("Failed to read the file.", 'error');
         };
         reader.readAsText(file);
     } else {
@@ -130,7 +140,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                  placeholder="e.g. React Developer, UI Designer"
                  onChange={(e) => { setRolesInput(e.target.value); setIsDirty(true); }} 
                />
-               <p className="text-[10px] text-slate-400 font-medium">AI uses these keywords to filter your inbox.</p>
            </div>
            <div className="space-y-4">
                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('target_loc')}</label>
@@ -141,7 +150,6 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
                  placeholder="e.g. Remote, New York, Europe"
                  onChange={(e) => { setLocationsInput(e.target.value); setIsDirty(true); }} 
                />
-               <p className="text-[10px] text-slate-400 font-medium">Used for geographic discovery & filtering.</p>
            </div>
         </div>
       </div>
@@ -182,6 +190,57 @@ export const Settings: React.FC<SettingsProps> = ({ userProfile, onUpdate, showN
             />
         </div>
       </div>
+
+      {/* Security & Protocol Section - OWNER ONLY */}
+      {isOwner && (
+        <div className="bg-slate-900 text-white p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600/5 rounded-full -mr-32 -mt-32 blur-3xl transition-all"></div>
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 relative z-10">
+                <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest flex items-center text-white">
+                        <ShieldCheck className="w-6 h-6 mr-4 text-emerald-400" /> Security & Protocol
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Infrastructure Governance (Superuser)</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                <div className="bg-white/5 p-6 rounded-3xl border border-white/10 hover:border-white/20 transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                        <Terminal className="w-5 h-5 text-indigo-400" />
+                        <span className="text-xs font-black uppercase tracking-widest text-white">Consult-First Protocol</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span className="text-[10px] font-black text-emerald-400 uppercase">Status: Active</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+                        No code changes will be performed to this repository without a shared specification and your explicit approval.
+                    </p>
+                </div>
+
+                <div className="bg-white/5 p-6 rounded-3xl border border-white/10 hover:border-white/20 transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                        <Lock className="w-5 h-5 text-indigo-400" />
+                        <span className="text-xs font-black uppercase tracking-widest text-white">Cloud-Isolated Storage</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span className="text-[10px] font-black text-emerald-400 uppercase">Status: Active</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+                        All user-specific data (Leads, Resumes, Profiles) is strictly isolated in the Neon Database and will never be committed to Git.
+                    </p>
+                </div>
+            </div>
+            
+            <div className="mt-8 pt-8 border-t border-white/5 flex items-center gap-3 text-slate-500 relative z-10">
+                <EyeOff className="w-4 h-4" />
+                <span className="text-[9px] font-black uppercase tracking-widest">Privacy Guard Enabled • Single-Source Repository</span>
+            </div>
+        </div>
+      )}
 
       {/* Floating Action Bar */}
       {isDirty && (

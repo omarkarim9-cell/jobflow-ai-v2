@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Job, JobStatus } from '../types';
 import { Building2, MapPin, Calendar, StickyNote, FileText, Sparkles, ExternalLink, Eye } from 'lucide-react';
 import { openSafeApplicationUrl } from '../services/automationService';
@@ -13,7 +13,7 @@ interface JobCardProps {
   onAutoApply: (e: React.MouseEvent, job: Job) => void;
 }
 
-export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isChecked, onToggleCheck, onAutoApply }) => {
+export const JobCard: React.FC<JobCardProps> = memo(({ job, onClick, isSelected, isChecked, onToggleCheck, onAutoApply }) => {
   const getStatusColor = (status: JobStatus) => {
     switch (status) {
       case JobStatus.DETECTED: return 'bg-blue-100 text-blue-700 border-blue-200';
@@ -57,7 +57,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
   return (
     <div 
       onClick={() => onClick(job)}
-      className={`p-5 mb-3 rounded-2xl border cursor-pointer transition-all duration-300 relative group ${
+      className={`p-5 mb-3 rounded-2xl border cursor-pointer transition-all duration-300 relative group will-change-transform ${
         isSelected 
           ? 'bg-white border-indigo-500 shadow-xl ring-1 ring-indigo-500' 
           : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-lg'
@@ -65,7 +65,6 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
     >
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3 overflow-hidden">
-           {/* Checkbox for Bulk Selection */}
            <div 
              onClick={handleCheckboxClick}
              className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shrink-0 ${
@@ -163,4 +162,4 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
       </div>
     </div>
   );
-};
+});
