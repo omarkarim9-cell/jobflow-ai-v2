@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
-import { useAuth } from '@clerk/clerk-react';
 import { Job, JobStatus } from '../types';
-import { X, Building2, MapPin, Globe, Plus, Briefcase, Wand2, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
+import { X, Link as LinkIcon, Loader2, Sparkles, Edit3 } from 'lucide-react';
 import { extractJobFromUrl } from '../services/geminiService';
 
 interface AddJobModalProps {
@@ -12,164 +10,328 @@ interface AddJobModalProps {
 }
 
 export const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd }) => {
-  const { getToken } = useAuth();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [hasExtracted, setHasExtracted] = useState(false);
-  const [sources, setSources] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
+  const [mode, setMode] = useState<'url' | 'manual'>('url');
+  const [jobUrl, setJobUrl] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [error, setError] = useState('');
+  
+  // Manual entry fields
+  const [manualData, setManualData] = useState({
     title: '',
     company: '',
     location: '',
-    salaryRange: '',
-    applicationUrl: '',
     description: '',
-    requirements: ''
+    url: ''
   });
 
-  if (!isOpen) return null;
+  const handleExtractFromUrl = async () => {
+    if (!jobUrl.trim()) {
+      setError('Please enter a job URL');
+      return;
+    }
 
-  const handleAutoFill = async () => {
-    if (!formData.applicationUrl) return;
-    
-    setIsAnalyzing(true);
-    setSources([]);
     try {
-      // Fix: retrieve the auth token and pass it to extractJobFromUrl
-      const token = await getToken();
-      if (!token) throw new Error("Authentication required");
+      new URL(jobUrl);
+    } catch {
+      setError('Please enter a valid URL');
+      return;
+    }
 
-      const result = await extractJobFromUrl(formData.applicationUrl, token);
+    setIsExtracting(true);
+    setError('');
+
+    try {
+      const { data } = await extractJobFromUrl(jobUrl);
       
-      setFormData(prev => ({
-        ...prev,
-        title: result.data.title || prev.title,
-        company: result.data.company || prev.company,
-        location: result.data.location || prev.location,
-        description: result.data.description || prev.description,
-        requirements: result.data.requirements || prev.requirements
-      }));
-      setSources(result.sources);
-      setHasExtracted(true);
-    } catch (error) {
-      console.error("Failed to auto-fill", error);
-      alert("Could not extract details. Please enter manually.");
+      const extractionFailed = data.title.includes('Failed') || data.title.includes('Manual Entry');
+      
+      if (extractionFailed) {
+        // Switch to manual mode with URL pre-filled
+        setMode('manual');
+        setManualData({ ...manualData, url: jobUrl });
+        setError('Auto-extraction failed. Please enter details manually.');
+        setIsExtracting(false);
+        return;
+      }
+      
+      const newJob: Job = {
+        id: `manual-${Date.now()}`,
+        title: data.title,
+        company: data.company,
+        location: data.location || 'Remote',
+        salaryRange: data.salaryRange || '',
+        description: data.description,
+        source: 'Imported Link',
+        detectedAt: new Date().toISOString(),
+        status: JobStatus.SAVED,
+        matchScore: 75,
+        requirements: Array.isArray(data.requirements) ? data.requirements : [],
+        applicationUrl: jobUrl,
+        logoUrl: '',
+        notes: 'Extracted via AI'
+      };
+
+      onAdd(newJob);
+      resetForm();
+      onClose();
+    } catch (err: any) {
+      console.error('Job extraction error:', err);
+      setError('Extraction failed. Switch to manual entry?');
     } finally {
-      setIsAnalyzing(false);
+      setIsExtracting(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleManualSubmit = () => {
+    if (!manualData.title.trim() || !manualData.company.trim()) {
+      setError('Title and Company are required');
+      return;
+    }
+
     const newJob: Job = {
       id: `manual-${Date.now()}`,
-      title: formData.title || 'Untitled Role',
-      company: formData.company || 'Check Description',
-      location: formData.location || 'Remote',
-      salaryRange: formData.salaryRange,
-      description: formData.description,
-      source: 'Imported Link', 
+      title: manualData.title,
+      company: manualData.company,
+      location: manualData.location || 'Remote',
+      salaryRange: '',
+      description: manualData.description || 'No description provided',
+      source: 'Imported Link',
       detectedAt: new Date().toISOString(),
       status: JobStatus.SAVED,
-      matchScore: 100, 
-      requirements: formData.requirements ? formData.requirements.split(',').map(r => r.trim()).filter(r => r) : [],
-      applicationUrl: formData.applicationUrl,
-      notes: sources.length > 0 ? `Verified via AI Search` : 'Added manually'
+      matchScore: 70,
+      requirements: [],
+      applicationUrl: manualData.url || '',
+      logoUrl: '',
+      notes: 'Manually entered'
     };
 
     onAdd(newJob);
+    resetForm();
     onClose();
   };
 
+  const resetForm = () => {
+    setJobUrl('');
+    setManualData({ title: '', company: '', location: '', description: '', url: '' });
+    setError('');
+    setMode('url');
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isExtracting && mode === 'url') {
+      handleExtractFromUrl();
+    }
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-300 border border-slate-200">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
-          <h2 className="text-xl font-black text-slate-900 flex items-center tracking-tight uppercase">
-            <Plus className="w-6 h-6 mr-3 text-indigo-600" />
-            Add Job Lead
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors">
-            <X className="w-6 h-6" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between p-8 border-b border-slate-200 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 rounded-2xl">
+              {mode === 'url' ? <Sparkles className="w-6 h-6 text-indigo-600" /> : <Edit3 className="w-6 h-6 text-indigo-600" />}
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">Add Job</h2>
+              <p className="text-sm text-slate-500 font-medium mt-1">
+                {mode === 'url' ? 'Extract from URL or enter manually' : 'Enter job details manually'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => { resetForm(); onClose(); }}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            disabled={isExtracting}
+          >
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          
-          {/* AI Extraction Bar */}
-          <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100/50">
-            <label className="block text-[10px] font-black text-indigo-900 mb-3 uppercase tracking-[0.2em] flex items-center">
-              <Link2 className="w-4 h-4 mr-2" />
-              Intelligence Auto-Fill
-            </label>
-            <div className="flex gap-3">
-               <div className="relative flex-1">
-                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
-                  <input 
-                    type="url" 
-                    className="w-full pl-11 pr-4 py-3.5 border border-white rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold bg-white shadow-inner"
-                    placeholder="Paste Job URL (LinkedIn, Indeed, Career Site)..."
-                    value={formData.applicationUrl}
-                    onChange={e => setFormData({...formData, applicationUrl: e.target.value})}
+        {/* Mode Toggle */}
+        <div className="p-6 border-b border-slate-200">
+          <div className="flex gap-2 bg-slate-100 rounded-xl p-1">
+            <button
+              onClick={() => setMode('url')}
+              className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                mode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 inline mr-2" />
+              AI Extract
+            </button>
+            <button
+              onClick={() => setMode('manual')}
+              className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                mode === 'manual' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600'
+              }`}
+            >
+              <Edit3 className="w-4 h-4 inline mr-2" />
+              Manual Entry
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-8 space-y-6">
+          {mode === 'url' ? (
+            <>
+              <div className="space-y-3">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                  Job Posting URL
+                </label>
+                <div className="relative">
+                  <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="url"
+                    value={jobUrl}
+                    onChange={(e) => {
+                      setJobUrl(e.target.value);
+                      setError('');
+                    }}
+                    onKeyPress={handleKeyPress}
+                    placeholder="https://linkedin.com/jobs/... or indeed.com/..."
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm font-medium text-slate-700 placeholder:text-slate-400"
+                    disabled={isExtracting}
                   />
-               </div>
-               <button 
-                  type="button"
-                  onClick={handleAutoFill}
-                  disabled={!formData.applicationUrl || isAnalyzing}
-                  className={`px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center ${
-                    hasExtracted ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
-               >
-                  {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : hasExtracted ? <Check className="w-4 h-4 mr-2" /> : <Wand2 className="w-4 h-4 mr-2" />}
-                  {isAnalyzing ? 'Mapping...' : hasExtracted ? 'Updated' : 'Extract'}
-               </button>
-            </div>
-          </div>
+                </div>
+                {error && (
+                  <p className="text-xs font-bold text-red-600 flex items-center gap-2">
+                    <span className="w-1 h-1 bg-red-600 rounded-full"></span>
+                    {error}
+                  </p>
+                )}
+              </div>
 
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Job Title</label>
-                <div className="relative">
-                  <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input required type="text" className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-700" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
+                <p className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3">
+                  Supported Platforms
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {['LinkedIn', 'Indeed', 'Glassdoor', 'Monster', 'Company Sites'].map((platform) => (
+                    <span
+                      key={platform}
+                      className="px-3 py-1.5 bg-white text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200"
+                    >
+                      {platform}
+                    </span>
+                  ))}
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Company</label>
-                <div className="relative">
-                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input required type="text" className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-700" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
+            </>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Job Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={manualData.title}
+                    onChange={(e) => setManualData({ ...manualData, title: e.target.value })}
+                    placeholder="e.g. Senior Frontend Developer"
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Company *
+                  </label>
+                  <input
+                    type="text"
+                    value={manualData.company}
+                    onChange={(e) => setManualData({ ...manualData, company: e.target.value })}
+                    placeholder="e.g. Google"
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={manualData.location}
+                    onChange={(e) => setManualData({ ...manualData, location: e.target.value })}
+                    placeholder="e.g. Remote, San Francisco, etc."
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Application URL
+                  </label>
+                  <input
+                    type="url"
+                    value={manualData.url}
+                    onChange={(e) => setManualData({ ...manualData, url: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+                    Job Description
+                  </label>
+                  <textarea
+                    value={manualData.description}
+                    onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
+                    placeholder="Paste job description here..."
+                    rows={6}
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-medium resize-none"
+                  />
                 </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Location</label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="text" className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-700" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Salary Estimate</label>
-                <input type="text" className="w-full px-4 py-3.5 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-700" placeholder="e.g. $120k - $150k" value={formData.salaryRange} onChange={e => setFormData({...formData, salaryRange: e.target.value})} />
-              </div>
-            </div>
+              {error && (
+                <p className="text-xs font-bold text-red-600 flex items-center gap-2">
+                  <span className="w-1 h-1 bg-red-600 rounded-full"></span>
+                  {error}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Job Description</label>
-              <textarea required className="w-full p-6 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-slate-600 leading-relaxed h-64 resize-none font-medium" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Paste full job description here..." />
-            </div>
-          </div>
-
-          <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="px-6 py-3.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
-            <button type="submit" disabled={!formData.title || !formData.company} className="px-10 py-3.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 shadow-xl transition-all disabled:opacity-50">Create Job</button>
-          </div>
-        </form>
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-8 border-t border-slate-200 bg-slate-50 rounded-b-3xl">
+          <button
+            onClick={() => { resetForm(); onClose(); }}
+            className="px-6 py-3 rounded-xl text-sm font-black text-slate-600 hover:bg-slate-200 transition-colors uppercase tracking-widest"
+            disabled={isExtracting}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={mode === 'url' ? handleExtractFromUrl : handleManualSubmit}
+            disabled={(mode === 'url' && (!jobUrl.trim() || isExtracting)) || (mode === 'manual' && (!manualData.title.trim() || !manualData.company.trim()))}
+            className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isExtracting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Extracting...
+              </>
+            ) : mode === 'url' ? (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Extract Job
+              </>
+            ) : (
+              <>
+                <Edit3 className="w-4 h-4" />
+                Add Job
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

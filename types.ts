@@ -23,7 +23,6 @@ export enum ViewState {
   REVIEW_SELECTION = 'REVIEW_SELECTION',
   GENERATED_JOBS_LIST = 'GENERATED_JOBS_LIST',
   ONBOARDING = 'ONBOARDING',
-  INTERVIEW_PREP = 'INTERVIEW_PREP',
   DEBUG = 'DEBUG'
 }
 
@@ -34,12 +33,10 @@ export interface Job {
   location: string;
   salaryRange?: string;
   description: string;
-  // Updated source type to include 'Google Maps' and 'Manual' to support discovery features and manual entry.
-  source: 'Gmail' | 'LinkedIn' | 'Indeed' | 'Imported Link' | 'Google Maps' | 'Manual';
+  source: 'Gmail' | 'LinkedIn' | 'Indeed' | 'Imported Link';
   detectedAt: string; 
   status: JobStatus;
   matchScore: number; 
-  fitReason?: string;
   requirements: string[];
   coverLetter?: string;
   customizedResume?: string; 
