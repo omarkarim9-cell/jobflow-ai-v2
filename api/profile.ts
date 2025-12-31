@@ -1,7 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { neon } from '@neondatabase/serverless';
-// Add this right after your imports in profile.ts
-
 
 // Lazy initialization - only create when needed
 let sql: any = null;
@@ -57,18 +55,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-  let userId: string;
- console.log('[PROFILE] NODE_ENV:', process.env.NODE_ENV);
-if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
-  userId = 'dev_user_123';
-  console.log('[PROFILE] Development mode - bypassing Clerk auth');
-} else {
-  userId = await getUserIdFromClerkToken(req);
-  if (!userId) {
-    console.error('No userId found in token');
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-}
+    // Development bypass
+    let userId: string;
+    if (process.env.NODE_ENV === 'development') {
+      userId = 'dev_user_123';
+      console.log('[PROFILE] Development mode - bypassing Clerk auth');
+    } else {
+      userId = await getUserIdFromClerkToken(req);
+      if (!userId) {
+        console.error('No userId found in token');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
 
     const sql = getSql();
 

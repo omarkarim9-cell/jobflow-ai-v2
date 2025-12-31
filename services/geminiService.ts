@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { Job, JobStatus } from "../types";
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Job, JobStatus } from '../types';
 
 /**
  * Generates a tailored cover letter using the Gemini model.
@@ -12,40 +12,53 @@ export const generateCoverLetter = async (
   name: string,
   email: string
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
+    }
 
-  const isPlaceholder =
-    !company ||
-    company.toLowerCase().includes("review") ||
-    company.toLowerCase().includes("unknown") ||
-    company.toLowerCase().includes("site") ||
-    company.toLowerCase().includes("description");
+    const ai = new GoogleGenerativeAI({ apiKey });
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Write a professional, high-impact cover letter for the ${title} position.
+    const isPlaceholder =
+      !company ||
+      company.toLowerCase().includes('review') ||
+      company.toLowerCase().includes('unknown') ||
+      company.toLowerCase().includes('site') ||
+      company.toLowerCase().includes('description');
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Write a professional, high-impact cover letter for the ${title} position.
 
 CONTEXT:
 - Target Company: ${
-      isPlaceholder
-        ? 'Carefully scan the job description below to identify the actual company name. If not found, use "Hiring Manager".'
-        : company
-    }
+        isPlaceholder
+          ? 'Carefully scan the job description below to identify the actual company name. If not found, use "Hiring Manager".'
+          : company
+      }
 - Candidate: ${name} (${email})
+- Job Title: ${title}
 - Job Description: ${description}
-- Source Resume: ${resume}
+- Candidate Resume: ${resume}
 
-STRICT INSTRUCTIONS:
-- NEVER use the phrase "Review Required", "Unknown Company", "Check Site", or "Check Description" in the letter.
-- Address the recipient formally.
-- Match candidate skills to the requirements in the job description.`,
-    config: {
-      systemInstruction:
-        "You are an expert career coach writing professional, ATS-optimized cover letters.",
-    },
-  });
+REQUIREMENTS:
+1. Keep cover letter under 400 words
+2. Match candidate skills to job requirements
+3. NEVER use placeholder text like "Review Required", "Unknown Company", "Check Site", or "Check Description"
+4. Use professional tone and ATS-friendly formatting
+5. Include specific accomplishments from resume that align with job requirements`,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      },
+    });
 
-  return response.text || "";
+    return response.response.text() || '';
+  } catch (error: any) {
+    console.error('[generateCoverLetter] Error:', error.message);
+    return `Cover letter generation failed: ${error.message}`;
+  }
 };
 
 /**
@@ -58,34 +71,61 @@ export const customizeResume = async (
   resume: string,
   email: string
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
+    }
 
-  const isPlaceholder =
-    !company || company.toLowerCase().includes("review") || company.toLowerCase().includes("unknown");
+    const ai = new GoogleGenerativeAI({ apiKey });
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Tailor this resume for a ${title} role at ${
-      isPlaceholder ? "the target company" : company
-    }.
+    const isPlaceholder =
+      !company ||
+      company.toLowerCase().includes('review') ||
+      company.toLowerCase().includes('unknown');
 
-Email: ${email}.
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Tailor this resume for a ${title} role at ${
+        isPlaceholder ? 'the target company' : company
+      }.
 
-Original Resume: ${resume}
+Email: ${email}
 
-Job Description: ${description}`,
-    config: {
-      systemInstruction:
-        "You are a professional resume writer specializing in ATS optimization. Rewrite bullet points to emphasize relevant experience for the specific role.",
-    },
-  });
+Original Resume:
+${resume}
 
-  return response.text || "";
+Job Description:
+${description}
+
+INSTRUCTIONS:
+1. Reorder experience to highlight relevant skills first
+2. Adapt bullet points to match job description keywords
+3. Emphasize achievements with metrics (e.g., increased by X%, saved Y hours)
+4. Keep the same length and structure
+5. Focus on ATS optimization with proper formatting`,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
+    });
+
+    return response.response.text() || '';
+  } catch (error: any) {
+    console.error('[customizeResume] Error:', error.message);
+    return `Resume customization failed: ${error.message}`;
+  }
 };
+
+/**
+ * Extracts job details from URL via server-side API
+ */
 export const extractJobFromUrl = async (
   url: string
 ): Promise<{ data: any; sources: any[] }> => {
   try {
+    console.log('[extractJobFromUrl] Extracting from URL:', url);
+
     const res = await fetch('/api/extract-job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,7 +147,9 @@ export const extractJobFromUrl = async (
       };
     }
 
-    return res.json();
+    const result = await res.json();
+    console.log('[extractJobFromUrl] Success:', result.data.title);
+    return result;
   } catch (error: any) {
     console.error('[extractJobFromUrl] Error:', error);
     return {
@@ -123,7 +165,7 @@ export const extractJobFromUrl = async (
     };
   }
 };
- 
+
 /**
  * Extracts multiple job listings from email HTML.
  */
@@ -139,127 +181,187 @@ export const extractJobsFromEmailHtml = async (
     applicationUrl: string;
   }[]
 > => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Extract job postings from this email HTML. Return a JSON array of objects.
-
-Each object must have:
-- title (string)
-- company (string)
-- location (string)
-- salaryRange (string)
-- description (string)
-- applicationUrl (string)
-
-HTML:
-${html}`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            company: { type: Type.STRING },
-            location: { type: Type.STRING },
-            salaryRange: { type: Type.STRING },
-            description: { type: Type.STRING },
-            applicationUrl: { type: Type.STRING },
-          },
-          required: ["title", "company"],
-        },
-      },
-    },
-  });
-
   try {
-    return JSON.parse(response.text || "[]");
-  } catch {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
+    }
+
+    const ai = new GoogleGenerativeAI({ apiKey });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Extract ALL job postings from this email HTML. Return ONLY a valid JSON array of objects.
+
+Each object must have these EXACT keys:
+- title (string): Job title
+- company (string): Company name
+- location (string): Job location or "Remote"
+- salaryRange (string): Salary range or empty string
+- description (string): Job description (max 500 chars)
+- applicationUrl (string): Application link or empty string
+
+HTML Content:
+${html}
+
+IMPORTANT: Return ONLY valid JSON array, no other text.`,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 4096,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    try {
+      const text = response.response.text();
+      // Extract JSON from response (in case there's extra text)
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch : text);
+      
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (parseError) {
+      console.error('[extractJobsFromEmailHtml] Parse error:', parseError);
+      return [];
+    }
+  } catch (error: any) {
+    console.error('[extractJobsFromEmailHtml] Error:', error.message);
     return [];
   }
 };
 
 /**
- * URL cleaning helper
+ * URL cleaning helper - removes tracking parameters
  */
 export const getSmartApplicationUrl = (
   url: string,
-  title: string,
-  company: string
+  title?: string,
+  company?: string
 ): string => {
   try {
     const u = new URL(url);
     const paramsToRemove = [
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_term",
-      "utm_content",
-      "ref",
-      "source",
-      "click_id",
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'ref',
+      'source',
+      'click_id',
+      'fbclid',
+      'gclid',
     ];
     paramsToRemove.forEach((p) => u.searchParams.delete(p));
     return u.toString();
-  } catch {
+  } catch (error) {
+    console.error('[getSmartApplicationUrl] Invalid URL:', url);
     return url;
   }
 };
 
 /**
- * Maps grounding search (nearby jobs via Gemini + Google Maps tool).
+ * Searches for nearby jobs using Gemini (note: requires proper tool setup)
  */
 export const searchNearbyJobs = async (
   lat: number,
   lng: number,
   role: string
 ): Promise<Job[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: `Find 5 active ${role} job openings near latitude ${lat}, longitude ${lng}.`,
-    config: {
-      tools: [{ googleMaps: {} }],
-      toolConfig: {
-        retrievalConfig: {
-          latLng: {
-            latitude: lat,
-            longitude: lng,
-          },
-        },
-      },
-    },
-  });
-
-  const groundingChunks =
-    response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-
-  const jobs: Job[] = [];
-
-  groundingChunks.forEach((chunk: any, index: number) => {
-    if (chunk.maps) {
-      jobs.push({
-        id: `maps-${Date.now()}-${index}`,
-        title: role,
-        company: chunk.maps.title || "Nearby Company",
-        location: "Local Area",
-        description: "Found via Google Maps grounding.",
-        source: "Imported Link",
-        detectedAt: new Date().toISOString(),
-        status: JobStatus.DETECTED,
-        matchScore: 85,
-        requirements: [],
-        applicationUrl: chunk.maps.uri || "",
-        logoUrl: "",
-        notes: "",
-        salaryRange: "",
-      });
+  try {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
     }
-  });
 
-  return jobs;
+    const ai = new GoogleGenerativeAI({ apiKey });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Find 5 active ${role} job openings near latitude ${lat}, longitude ${lng}. 
+      
+      Return as JSON array with: title, company, location, description, applicationUrl`,
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 2048,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    try {
+      const text = response.response.text();
+      const parsed = JSON.parse(text);
+      
+      const jobs: Job[] = Array.isArray(parsed)
+        ? parsed.map((job: any, index: number) => ({
+            id: `nearby-${Date.now()}-${index}`,
+            title: job.title || role,
+            company: job.company || 'Unknown Company',
+            location: job.location || 'Local Area',
+            description: job.description || 'Found via location search',
+            source: 'Location Search',
+            detectedAt: new Date().toISOString(),
+            status: JobStatus.DETECTED,
+            matchScore: 75,
+            requirements: job.requirements || [],
+            applicationUrl: job.applicationUrl || '',
+            logoUrl: '',
+            notes: 'Found via nearby job search',
+            salaryRange: job.salaryRange || '',
+          }))
+        : [];
+
+      return jobs;
+    } catch {
+      return [];
+    }
+  } catch (error: any) {
+    console.error('[searchNearbyJobs] Error:', error.message);
+    return [];
+  }
+};
+
+/**
+ * Generates match score between job and user profile
+ */
+export const calculateJobMatchScore = async (
+  jobDescription: string,
+  userResume: string,
+  userPreferences: { targetRoles?: string[]; targetLocations?: string[] }
+): Promise<number> => {
+  try {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
+    }
+
+    const ai = new GoogleGenerativeAI({ apiKey });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Rate the match between this job and the candidate on a scale of 0-100.
+
+Job Description:
+${jobDescription}
+
+Candidate Resume:
+${userResume}
+
+Target Roles: ${userPreferences.targetRoles?.join(', ') || 'Any'}
+Target Locations: ${userPreferences.targetLocations?.join(', ') || 'Any'}
+
+Return ONLY a single number between 0-100.`,
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 10,
+      },
+    });
+
+    const scoreText = response.response.text().trim();
+    const score = parseInt(scoreText, 10);
+    
+    return isNaN(score) ? 50 : Math.min(100, Math.max(0, score));
+  } catch (error: any) {
+    console.error('[calculateJobMatchScore] Error:', error.message);
+    return 50; // Default middle score on error
+  }
 };
