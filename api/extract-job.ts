@@ -32,15 +32,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
     let pageContent = '';
 
-    try {
-      const pageRes = await fetch(proxyUrl, { timeout: 15000 });
-      if (pageRes.ok) {
-        pageContent = await pageRes.text();
-        console.log('[extract-job] Fetched page content, length:', pageContent.length);
-      }
-    } catch (e) {
-      console.error('[extract-job] Failed to fetch page content:', e);
-      pageContent = '';
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const pageRes = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (pageRes.ok) {
+          pageContent = await pageRes.text();
+          console.log('[extract-job] Fetched page content, length:', pageContent.length);
+        }
+      } catch (e) {
+        const err: any = e;
+        if (err && err.name === 'AbortError') {
+          console.error('[extract-job] Fetch timed out');
+        } else {
+          console.error('[extract-job] Failed to fetch page content:', e);
+        }
     }
 
     // 2. Call Gemini on the server
