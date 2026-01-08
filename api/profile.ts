@@ -60,7 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  console.log('[PROFILE] HANDLER START, NODE_ENV =', process.env.NODE_ENV, 'method:', req.method);
+  console.log(
+    '[PROFILE] HANDLER START, NODE_ENV =',
+    process.env.NODE_ENV,
+    'method:',
+    req.method
+  );
 
   try {
     const userId = await getUserIdFromRequest(req);
@@ -70,10 +75,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const sql = getSql();
 
+    // GET: fetch profile for this Clerk user
     if (req.method === 'GET') {
       const rows = await sql<any[]>`
         SELECT
           id,
+          clerk_user_id,
           full_name,
           email,
           phone,
@@ -86,17 +93,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           total_ai_used,
           updated_at
         FROM profiles
-        WHERE id = ${userId}
+        WHERE clerk_user_id = ${userId}
         LIMIT 1
       `;
 
       const row = rows[0] || null;
       if (!row) {
+        // No profile yet for this user
         return res.status(200).json(null);
       }
 
       const profile: UserProfile = {
-        id: row.id,
+        id: row.clerk_user_id, // expose Clerk id as logical id
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
@@ -113,12 +121,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(profile);
     }
 
+    // POST: upsert profile for this Clerk user
     if (req.method === 'POST') {
       const body = req.body as UserProfile;
 
       const rows = await sql<any[]>`
         INSERT INTO profiles (
-          id,
+          clerk_user_id,
           full_name,
           email,
           phone,
@@ -145,21 +154,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${body.totalAiUsed ?? 0},
           NOW()
         )
-        ON CONFLICT (id) DO UPDATE
+        ON CONFLICT (clerk_user_id) DO UPDATE
         SET
-          full_name = EXCLUDED.full_name,
-          email = EXCLUDED.email,
-          phone = EXCLUDED.phone,
-          resume_content = EXCLUDED.resume_content,
-          resume_file_name = EXCLUDED.resume_file_name,
-          preferences = EXCLUDED.preferences,
+          full_name          = EXCLUDED.full_name,
+          email              = EXCLUDED.email,
+          phone              = EXCLUDED.phone,
+          resume_content     = EXCLUDED.resume_content,
+          resume_file_name   = EXCLUDED.resume_file_name,
+          preferences        = EXCLUDED.preferences,
           connected_accounts = EXCLUDED.connected_accounts,
-          plan = EXCLUDED.plan,
-          daily_ai_credits = EXCLUDED.daily_ai_credits,
-          total_ai_used = EXCLUDED.total_ai_used,
-          updated_at = NOW()
+          plan               = EXCLUDED.plan,
+          daily_ai_credits   = EXCLUDED.daily_ai_credits,
+          total_ai_used      = EXCLUDED.total_ai_used,
+          updated_at         = NOW()
         RETURNING
           id,
+          clerk_user_id,
           full_name,
           email,
           phone,
@@ -176,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const row = rows[0];
 
       const saved: UserProfile = {
-        id: row.id,
+        id: row.clerk_user_id,
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
