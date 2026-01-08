@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
 import {
-  Send,
   Users,
   Star,
   BarChart3,
@@ -10,6 +9,7 @@ import {
   Settings as SettingsIcon,
   AlertCircle,
 } from 'lucide-react';
+
 import {
   AreaChart,
   Area,
