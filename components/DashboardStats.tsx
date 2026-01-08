@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Job, JobStatus, UserProfile } from '../types.ts';
+import { Job, JobStatus, UserProfile } from '../types';
 import {
   Send,
   Users,
