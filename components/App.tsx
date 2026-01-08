@@ -88,12 +88,13 @@ export const App: React.FC = () => {
             targetLocations: [],
             minSalary: '',
             remoteOnly: false,
-            language: 'en',
+            language: 'en'
           },
           connectedAccounts: [],
-          plan: 'pro',
+          plan: 'pro'
         };
       }
+      
 
       setUserProfile(profile);
       setJobs(dbJobs);
