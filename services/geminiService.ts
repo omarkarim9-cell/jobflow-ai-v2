@@ -1,17 +1,196 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Job, JobStatus } from '../types';
+// services/geminiService.ts
+import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { Job, UserProfile, JobStatus } from "../types.ts";
 
-const getModel = (modelName: string) => {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
-  }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: modelName });
+/**
+ * Helper to initialize the Gemini client using the globally available API key.
+ * NOTE: In v2, this is used only from server-side /api handlers.
+ */
+const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+/**
+ * Deep Intelligence Scanner: Uses Pro model for high-accuracy ranking from email content.
+ * (kept for email scanner – used only server-side)
+ */
+export const analyzeJobsWithAi = async (html: string, resume: string) => {
+  const ai = getAi();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Analyze this email for job listings. 
+User Resume: ${resume.substring(0, 2000)}
+Email HTML: ${html.substring(0, 15000)}
+
+TASK: Extract job listings. Rank each 0-100 by fit against the resume. 
+Provide a concise "fitReason".`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          jobs: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                company: { type: Type.STRING },
+                location: { type: Type.STRING },
+                applicationUrl: { type: Type.STRING },
+                matchScore: { type: Type.NUMBER },
+                fitReason: { type: Type.STRING },
+              },
+              required: ["title", "company", "applicationUrl", "matchScore"],
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const parsed = JSON.parse(response.text || '{"jobs": []}');
+  return parsed.jobs || [];
 };
 
 /**
- * Generates a tailored cover letter using the Gemini model.
+ * Generates an audio briefing using Gemini TTS (PCM output).
+ * Server-side helper: called from /api/audio-briefing.
+ */
+export const generateAudioBriefing = async (
+  job: Job,
+  profile: UserProfile
+): Promise<string> => {
+  const ai = getAi();
+  const prompt = `Say cheerfully: Hi ${profile.fullName}! I've analyzed the ${job.title} role at ${job.company}. 
+Based on your experience, this is a ${job.matchScore}% match. I've prepared your tailored resume and cover letter. Good luck!`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: prompt }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: "Kore" },
+        },
+      },
+    },
+  });
+
+  const base64Audio =
+    response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64Audio) throw new Error("Audio generation failed");
+  return base64Audio;
+};
+
+/**
+ * Generates mock interview questions.
+ * Server-side helper: called from /api/interview-questions.
+ */
+export const generateInterviewQuestions = async (
+  job: Job,
+  profile: UserProfile
+) => {
+  const ai = getAi();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Generate 3 challenging mock interview questions for this specific job role.
+Role: ${job.title} at ${job.company}
+Description: ${job.description.substring(0, 1000)}
+Candidate Background: ${profile.resumeContent.substring(0, 1000)}`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          questions: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+        },
+        required: ["questions"],
+      },
+    },
+  });
+
+  const parsed = JSON.parse(response.text || '{"questions": []}');
+  return parsed.questions || [];
+};
+/**
+ * Job Extraction via backend API (v2 behavior).
+ * Calls /api/extract-job which handles HTML fetch + Gemini.
+ */
+export const extractJobFromUrl = async (
+  url: string
+): Promise<{ data: any; sources: any[] }> => {
+  const res = await fetch('/api/extract-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    console.error('[extractJobFromUrl] API error', res.status, errorBody);
+    throw new Error(errorBody.error || 'Failed to extract job');
+  }
+
+  const json = await res.json();
+  // Expecting shape { data, sources }
+  return {
+    data: json.data || {},
+    sources: json.sources || [],
+  };
+};
+
+/**
+ * Search nearby jobs using Maps grounding. Not used right now, but kept for future.
+ 
+export const searchNearbyJobs = async (
+  lat: number,
+  lng: number,
+  role: string
+): Promise<Job[]> => {
+  const ai = getAi();
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `Find hiring companies and job openings for "${role}" near my coordinates.`,
+    config: {
+      tools: [{ googleMaps: {} }],
+      toolConfig: {
+        retrievalConfig: {
+          latLng: {
+            latitude: lat,
+            longitude: lng,
+          },
+        },
+      },
+    },
+  });
+
+  const chunks =
+    response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const jobs = chunks
+    .filter((c: any) => c.maps)
+    .map((c: any, i: number) => ({
+      id: `map-${i}-${Date.now()}`,
+      title: role,
+      company: c.maps?.title || "Local Company",
+      location: "Nearby",
+      description: "Found via Maps discovery.",
+      source: "Google Maps" as const,
+      detectedAt: new Date().toISOString(),
+      status: JobStatus.DETECTED,
+      matchScore: 85,
+      applicationUrl: c.maps?.uri || "#",
+      requirements: [],
+    }));
+
+  return jobs;
+};*/
+
+/**
+ * Cover letter + resume: client-side wrappers that hit /api endpoints.
+ * These are the ones JobDetail uses.
  */
 export const generateCoverLetter = async (
   title: string,
@@ -19,249 +198,84 @@ export const generateCoverLetter = async (
   description: string,
   resume: string,
   name: string,
-  email: string
-): Promise<string> => {
-  try {
-    const model = getModel('gemini-1.5-flash');
-
-    const isPlaceholder =
-      !company ||
-      company.toLowerCase().includes('review') ||
-      company.toLowerCase().includes('unknown') ||
-      company.toLowerCase().includes('site') ||
-      company.toLowerCase().includes('description');
-
-    const prompt = `Write a professional, high-impact cover letter for the ${title} position.
-
-CONTEXT:
-- Target Company: ${isPlaceholder
-        ? 'Carefully scan the job description below to identify the actual company name. If not found, use "Hiring Manager".'
-        : company
-      }
-- Candidate: ${name} (${email})
-- Job Title: ${title}
-- Job Description: ${description}
-- Candidate Resume: ${resume}
-
-REQUIREMENTS:
-1. Keep cover letter under 400 words
-2. Match candidate skills to job requirements
-3. NEVER use placeholder text like "Review Required", "Unknown Company", "Check Site", or "Check Description"
-4. Use professional tone and ATS-friendly formatting
-5. Include specific accomplishments from resume that align with job requirements`;
-
-    const result = await model.generateContent(prompt);
-    return result.response.text() || '';
-  } catch (error: any) {
-    console.error('[generateCoverLetter] Error:', error.message);
-    return `Cover letter generation failed: ${error.message}`;
-  }
+  email: string,
+  token: string
+) => {
+  const response = await fetch("/api/cover-letter", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ title, company, description, resume, name, email }),
+  });
+  const result = await response.json();
+  return result.text || "";
 };
 
-/**
- * Customizes a resume based on the job description.
- */
 export const customizeResume = async (
   title: string,
   company: string,
   description: string,
   resume: string,
-  email: string
-): Promise<string> => {
-  try {
-    const model = getModel('gemini-1.5-flash');
-
-    const isPlaceholder =
-      !company ||
-      company.toLowerCase().includes('review') ||
-      company.toLowerCase().includes('unknown');
-
-    const prompt = `Tailor this resume for a ${title} role at ${isPlaceholder ? 'the target company' : company
-      }.
-
-Email: ${email}
-
-Original Resume:
-${resume}
-
-Job Description:
-${description}
-
-INSTRUCTIONS:
-1. Reorder experience to highlight relevant skills first
-2. Adapt bullet points to match job description keywords
-3. Emphasize achievements with metrics (e.g., increased by X%, saved Y hours)
-4. Keep the same length and structure
-5. Focus on ATS optimization with proper formatting`;
-
-    const result = await model.generateContent(prompt);
-    return result.response.text() || '';
-  } catch (error: any) {
-    console.error('[customizeResume] Error:', error.message);
-    return `Resume customization failed: ${error.message}`;
-  }
+  email: string,
+  token: string
+) => {
+  const response = await fetch("/api/tailor-resume", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ title, company, description, resume, email }),
+  });
+  const result = await response.json();
+  return result.text || "";
 };
 
 /**
- * Extracts job details from URL via server-side API.
+ * Thin client wrappers for new v2 APIs.
  */
-export const extractJobFromUrl = async (
-  url: string
-): Promise<{ data: any; sources: any[] }> => {
-  try {
-    console.log('[extractJobFromUrl] Extracting from URL:', url);
-
-    const res = await fetch('/api/extract-job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!res.ok) {
-      console.error('[extractJobFromUrl] API failed:', res.status);
-      return {
-        data: {
-          title: 'Extraction Failed',
-          company: 'Unknown',
-          location: 'Remote',
-          salaryRange: '',
-          description: 'Job extraction API error. Please enter details manually.',
-          requirements: [],
-        },
-        sources: [],
-      };
-    }
-
-    const result = await res.json();
-    console.log('[extractJobFromUrl] Success:', result.data.title);
-    return result;
-  } catch (error: any) {
-    console.error('[extractJobFromUrl] Error:', error);
-    return {
-      data: {
-        title: 'Extraction Failed',
-        company: 'Unknown',
-        location: 'Remote',
-        salaryRange: '',
-        description: `Error: ${error.message}. Please enter details manually.`,
-        requirements: [],
-      },
-      sources: [],
-    };
-  }
+export const fetchInterviewQuestions = async (
+  job: Job,
+  profile: UserProfile
+) => {
+  const res = await fetch("/api/interview-questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job, profile }),
+  });
+  if (!res.ok) throw new Error("Interview API failed");
+  const data = await res.json();
+  return (data.questions as string[]) || [];
 };
 
-/**
- * Extracts multiple job listings from email HTML.
- */
-export const extractJobsFromEmailHtml = async (
-  html: string
-): Promise<
-  {
-    title: string;
-    company: string;
-    location: string;
-    salaryRange: string;
-    description: string;
-    applicationUrl: string;
-  }[]
-> => {
-  try {
-    const model = getModel('gemini-1.5-flash');
-
-    const prompt = `Extract ALL job postings from this email HTML. Return ONLY a valid JSON array of objects.
-
-Each object must have these EXACT keys:
-- title (string): Job title
-- company (string): Company name
-- location (string): Job location or "Remote"
-- salaryRange (string): Salary range or empty string
-- description (string): Job description (max 500 chars)
-- applicationUrl (string): Application link or empty string
-
-HTML Content:
-${html}
-
-IMPORTANT: Return ONLY valid JSON array, no other text.`;
-
-    const result = await model.generateContent(prompt);
-
-    try {
-      const text = result.response.text();
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      const parsed = JSON.parse(jsonMatch ? jsonMatch : text);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (parseError) {
-      console.error('[extractJobsFromEmailHtml] Parse error:', parseError);
-      return [];
-    }
-  } catch (error: any) {
-    console.error('[extractJobsFromEmailHtml] Error:', error.message);
-    return [];
-  }
+export const fetchAudioBriefing = async (
+  job: Job,
+  profile: UserProfile
+) => {
+  const res = await fetch("/api/audio-briefing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job, profile }),
+  });
+  if (!res.ok) throw new Error("Audio API failed");
+  const data = await res.json();
+  return data.audioBase64 as string;
 };
 
-/**
- * URL cleaning helper - removes tracking parameters.
- */
 export const getSmartApplicationUrl = (
   url: string,
-  title?: string,
-  company?: string
+  title: string,
+  company: string
 ): string => {
   try {
     const u = new URL(url);
-    const paramsToRemove = [
-      'utm_source',
-      'utm_medium',
-      'utm_campaign',
-      'utm_term',
-      'utm_content',
-      'ref',
-      'source',
-      'click_id',
-      'fbclid',
-      'gclid',
-    ];
-    paramsToRemove.forEach((p) => u.searchParams.delete(p));
+    ["utm_source", "utm_medium", "utm_campaign"].forEach((p) =>
+      u.searchParams.delete(p)
+    );
     return u.toString();
-  } catch (error) {
-    console.error('[getSmartApplicationUrl] Invalid URL:', url);
+  } catch (e) {
     return url;
-  }
-};
-
-/**
- * Generates match score between job and user profile.
- */
-export const calculateJobMatchScore = async (
-  jobDescription: string,
-  userResume: string,
-  userPreferences: { targetRoles?: string[]; targetLocations?: string[] }
-): Promise<number> => {
-  try {
-    const model = getModel('gemini-1.5-flash');
-
-    const prompt = `Rate the match between this job and the candidate on a scale of 0-100.
-
-Job Description:
-${jobDescription}
-
-Candidate Resume:
-${userResume}
-
-Target Roles: ${userPreferences.targetRoles?.join(', ') || 'Any'}
-Target Locations: ${userPreferences.targetLocations?.join(', ') || 'Any'}
-
-Return ONLY a single number between 0-100.`;
-
-    const result = await model.generateContent(prompt);
-    const scoreText = result.response.text().trim();
-    const score = parseInt(scoreText, 10);
-
-    return isNaN(score) ? 50 : Math.min(100, Math.max(0, score));
-  } catch (error: any) {
-    console.error('[calculateJobMatchScore] Error:', error.message);
-    return 50;
   }
 };
