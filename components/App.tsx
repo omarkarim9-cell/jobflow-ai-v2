@@ -93,6 +93,13 @@ export const App: React.FC = () => {
           connectedAccounts: [],
           plan: 'pro'
         };
+
+        try {
+          const saved = await saveUserProfile(profile, token);
+          profile = saved ?? profile;
+        } catch (e) {
+          console.warn('[syncData] initial profile save failed', e);
+        }
       }
       
 
