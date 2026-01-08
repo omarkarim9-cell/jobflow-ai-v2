@@ -1,83 +1,42 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { UserProfile } from '../types';
-import { neon } from '@neondatabase/serverless';
-import { verifyToken } from '@clerk/backend';
+// pages/api/profile.ts
+import type { NextApiRequest, NextApiResponse } from 'next';
+import postgres from 'postgres';
+import { UserProfile } from '../../types'; // adjust relative path
 
-const CLERK_JWT_KEY = process.env.CLERK_JWT_KEY;
-const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
+const sql = postgres(process.env.DATABASE_URL as string, {
+  ssl: 'require',
+});
 
-let sqlSingleton: ReturnType<typeof neon> | null = null;
-function getSql() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set');
-  }
-  if (!sqlSingleton) {
-    sqlSingleton = neon(process.env.DATABASE_URL);
-  }
-  return sqlSingleton;
+// Row type returned from Neon
+interface ProfileRow {
+  id: number;
+  clerk_user_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  resume_content: string;
+  resume_file_name: string;
+  preferences: any;
+  connected_accounts: any;
+  plan: string;
+  daily_ai_credits: number;
+  total_ai_used: number;
+  updated_at: Date;
 }
 
-async function getUserIdFromRequest(req: VercelRequest): Promise<string | null> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('[PROFILE] Missing or invalid Authorization header');
-    return null;
-  }
-
-  const token = authHeader.substring(7);
-
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   try {
-    const verified = await verifyToken(token, {
-      jwtKey: CLERK_JWT_KEY,
-      secretKey: CLERK_SECRET_KEY,
-    });
-
-    const userId =
-      (verified as any).sub ||
-      (verified as any).userId ||
-      (verified as any).userid ||
-      null;
+    const userId = req.headers['x-clerk-user-id'] as string | undefined;
 
     if (!userId) {
-      console.error('[PROFILE] No userId in verified token payload');
-      return null;
+      return res.status(401).json({ error: 'Unauthorized: missing user id' });
     }
 
-    return userId;
-  } catch (err) {
-    console.error('[PROFILE] Clerk verifyToken failed', err);
-    return null;
-  }
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  console.log(
-    '[PROFILE] HANDLER START, NODE_ENV =',
-    process.env.NODE_ENV,
-    'method:',
-    req.method
-  );
-
-  try {
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const sql = getSql();
-
-    // GET: fetch profile for this Clerk user
     if (req.method === 'GET') {
-      const rows = await sql<any[]>`
+      const rows = await sql<ProfileRow[]>`
         SELECT
           id,
           clerk_user_id,
@@ -97,35 +56,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         LIMIT 1
       `;
 
-      const row = rows[0] || null;
-      if (!row) {
-        // No profile yet for this user
+      if (!rows.length) {
         return res.status(200).json(null);
       }
 
+      const row = rows[0];
+
       const profile: UserProfile = {
-        id: row.clerk_user_id, // expose Clerk id as logical id
-        fullName: row.full_name,
-        email: row.email,
-        phone: row.phone,
-        resumeContent: row.resume_content,
-        resumeFileName: row.resume_file_name,
-        preferences: row.preferences,
-        connectedAccounts: row.connected_accounts,
-        plan: row.plan,
-        dailyAiCredits: row.daily_ai_credits,
-        totalAiUsed: row.total_ai_used,
+        id: row.clerk_user_id,
+        fullName: row.full_name || '',
+        email: row.email || '',
+        phone: row.phone || '',
+        resumeContent: row.resume_content || '',
+        resumeFileName: row.resume_file_name || '',
+        preferences: row.preferences || {
+          targetRoles: [],
+          targetLocations: [],
+          minSalary: '',
+          remoteOnly: false,
+          language: 'en',
+        },
+        connectedAccounts: row.connected_accounts || [],
+        plan: row.plan || 'free',
+        dailyAiCredits: row.daily_ai_credits ?? 0,
+        totalAiUsed: row.total_ai_used ?? 0,
         updatedAt: row.updated_at,
       };
 
       return res.status(200).json(profile);
     }
 
-    // POST: upsert profile for this Clerk user
     if (req.method === 'POST') {
       const body = req.body as UserProfile;
 
-      const rows = await sql<any[]>`
+      // Normalize JSON fields to plain objects/arrays
+      const prefs =
+        body.preferences && typeof body.preferences === 'object'
+          ? body.preferences
+          : body.preferences ?? {
+            targetRoles: [],
+            targetLocations: [],
+            minSalary: '',
+            remoteOnly: false,
+            language: 'en',
+          };
+
+      const connected =
+        body.connectedAccounts && Array.isArray(body.connectedAccounts)
+          ? body.connectedAccounts
+          : body.connectedAccounts ?? [];
+
+      const rows = await sql<ProfileRow[]>`
         INSERT INTO profiles (
           clerk_user_id,
           full_name,
@@ -142,13 +123,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
         VALUES (
           ${userId},
-          ${body.fullName},
-          ${body.email},
-          ${body.phone},
-          ${body.resumeContent},
-          ${body.resumeFileName},
-          ${body.preferences as any},
-          ${body.connectedAccounts as any},
+          ${body.fullName || ''},
+          ${body.email || ''},
+          ${body.phone || ''},
+          ${body.resumeContent || ''},
+          ${body.resumeFileName || ''},
+          ${JSON.stringify(prefs)}::jsonb,
+          ${JSON.stringify(connected)}::jsonb,
           ${body.plan || 'free'},
           ${body.dailyAiCredits ?? 0},
           ${body.totalAiUsed ?? 0},
@@ -187,25 +168,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const saved: UserProfile = {
         id: row.clerk_user_id,
-        fullName: row.full_name,
-        email: row.email,
-        phone: row.phone,
-        resumeContent: row.resume_content,
-        resumeFileName: row.resume_file_name,
-        preferences: row.preferences,
-        connectedAccounts: row.connected_accounts,
-        plan: row.plan,
-        dailyAiCredits: row.daily_ai_credits,
-        totalAiUsed: row.total_ai_used,
+        fullName: row.full_name || '',
+        email: row.email || '',
+        phone: row.phone || '',
+        resumeContent: row.resume_content || '',
+        resumeFileName: row.resume_file_name || '',
+        preferences: row.preferences || prefs,
+        connectedAccounts: row.connected_accounts || connected,
+        plan: row.plan || body.plan || 'free',
+        dailyAiCredits: row.daily_ai_credits ?? body.dailyAiCredits ?? 0,
+        totalAiUsed: row.total_ai_used ?? body.totalAiUsed ?? 0,
         updatedAt: row.updated_at,
       };
 
       return res.status(200).json(saved);
     }
 
+    res.setHeader('Allow', ['GET', 'POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err: any) {
-    console.error('[PROFILE] Error:', err);
+    console.error('[PROFILE] Error:', err?.message || err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
