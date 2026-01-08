@@ -1,15 +1,15 @@
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-/*import {
-  Users,
-  Star,
-  BarChart3,
-  TrendingUp,
-  Search,
-  Settings as SettingsIcon,
-  AlertCircle,
-} from 'lucide-react';
-**/
+//
+//import {
+//  Users,
+//  Star,
+//  BarChart3,
+//  TrendingUp,
+//  Search,
+//  Settings as SettingsIcon,
+ // AlertCircle,
+//} from 'lucide-react';
 import { Users, Star, BarChart3, TrendingUp, Search, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
 import {
   AreaChart,
