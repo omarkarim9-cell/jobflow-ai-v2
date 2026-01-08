@@ -1,4 +1,3 @@
-// api/profile.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { UserProfile } from '../types';
 import { neon } from '@neondatabase/serverless';
@@ -7,7 +6,6 @@ import { verifyToken } from '@clerk/backend';
 const CLERK_JWT_KEY = process.env.CLERK_JWT_KEY;
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
 
-// Lazy Neon client
 let sqlSingleton: ReturnType<typeof neon> | null = null;
 function getSql() {
   if (!process.env.DATABASE_URL) {
@@ -20,12 +18,6 @@ function getSql() {
 }
 
 async function getUserIdFromRequest(req: VercelRequest): Promise<string | null> {
-  // Dev bypass: single fake user only for local development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PROFILE] Development mode – using dev_user_123');
-    return 'dev_user_123';
-  }
-
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     console.error('[PROFILE] Missing or invalid Authorization header');
@@ -39,6 +31,7 @@ async function getUserIdFromRequest(req: VercelRequest): Promise<string | null> 
       jwtKey: CLERK_JWT_KEY,
       secretKey: CLERK_SECRET_KEY,
     });
+
     const userId =
       (verified as any).sub ||
       (verified as any).userId ||
@@ -99,7 +92,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const row = rows[0] || null;
       if (!row) {
-        // No profile yet for this user
         return res.status(200).json(null);
       }
 
@@ -108,7 +100,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
-        // match field name your UI expects (e.g. resumeContent)
         resumeContent: row.resume_content,
         resumeFileName: row.resume_file_name,
         preferences: row.preferences,
