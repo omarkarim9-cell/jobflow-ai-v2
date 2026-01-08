@@ -1,7 +1,7 @@
 // pages/api/profile.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import postgres from 'postgres';
-import { UserProfile } from '../../types'; // adjust relative path
+import { UserProfile } from '../types'; // adjust relative path
 
 const sql = postgres(process.env.DATABASE_URL as string, {
   ssl: 'require',
