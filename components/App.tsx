@@ -61,27 +61,42 @@ export const App: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) {
+        console.error('[syncData] No token available');
         setLoading(false);
         return;
       }
+
+      // Add debugging
+      console.log('[syncData] Clerk User:', {
+        id: user?.id,
+        email: user?.primaryEmailAddress?.emailAddress,
+        fullName: user?.fullName
+      });
 
       let profile: UserProfile | null = null;
       let dbJobs: Job[] = [];
 
       try {
         profile = await getUserProfile(token);
+        console.log('[syncData] Profile from DB:', profile);
+        
         dbJobs = await fetchJobsFromDb(token);
+        console.log('[syncData] Jobs from DB:', dbJobs.length);
       } catch (dbError) {
-        console.warn('Database not available, using local state:', dbError);
+        console.error('[syncData] Database error:', dbError);
       }
 
+      // If no profile exists, create a new one
       if (!profile && user) {
+        console.log('[syncData] Creating new profile for user:', user.id);
+        
         profile = {
           id: user.id,
           fullName: user.fullName || '',
           email: user.primaryEmailAddress?.emailAddress || '',
           phone: '',
           resumeContent: '',
+          resumeFileName: '',
           onboardedAt: new Date().toISOString(),
           preferences: {
             targetRoles: [],
@@ -91,22 +106,25 @@ export const App: React.FC = () => {
             language: 'en'
           },
           connectedAccounts: [],
-          plan: 'pro'
+          plan: 'pro',
+          dailyAiCredits: 100,
+          totalAiUsed: 0
         };
 
         try {
           const saved = await saveUserProfile(profile, token);
+          console.log('[syncData] New profile saved:', saved);
           profile = saved ?? profile;
         } catch (e) {
-          console.warn('[syncData] initial profile save failed', e);
+          console.error('[syncData] Failed to save new profile:', e);
         }
       }
       
       setUserProfile(profile);
       setJobs(dbJobs);
     } catch (e) {
-      console.error('Sync Error:', e);
-      showNotification('Using local offline data.', 'success');
+      console.error('[syncData] Sync Error:', e);
+      showNotification('Error syncing data. Please refresh.', 'error');
     } finally {
       setLoading(false);
     }
@@ -120,7 +138,7 @@ export const App: React.FC = () => {
 
   const handleNavigate = useCallback((view: ViewState) => {
     setCurrentView(view);
-    setSelectedJobId(null); // close job detail overlay on navigation
+    setSelectedJobId(null);
   }, []);
   
 
