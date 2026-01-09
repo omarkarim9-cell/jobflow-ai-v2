@@ -1,166 +1,158 @@
 import React, { useState } from 'react';
 import { analyzeSyncIssue } from './services/geminiService'; 
-import { DiagnosticResult, DiagnosticStep } from './types';
+import { DiagnosticStep } from './types';
 import CodeBlock from './components/CodeBlock';
 
-// VERSION: 1.0.2 - CLEAN BUILD (No AutomationModal)
+/**
+ * VERSION: 1.0.6 - DEPLOYMENT_VERIFIER
+ * This version is 100% stripped of all legacy JobFlow imports.
+ * If you see '1.0.6' in your browser, the Vercel update was successful.
+ */
+
 const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   
-  const [diagnostics] = useState<DiagnosticResult[]>([
+  const diagnostics = [
     { 
       step: DiagnosticStep.CLERK_AUTH, 
       status: 'success', 
-      message: 'Clerk JWT is active. This is why the user "exists" even if Neon is empty.' 
+      message: 'Clerk identifies you via Browser Cookies/JWT. Deleting Neon rows does NOT log you out.' 
     },
     { 
       step: DiagnosticStep.WEBHOOK_RECEPTION, 
       status: 'warning', 
-      message: 'Missing Webhook: Clerk is not currently notifying Neon when users sign up.' 
-    },
-    { 
-      step: DiagnosticStep.NEON_INSERTION, 
-      status: 'error', 
-      message: 'Database Mismatch: Clerk user ID has no matching row in "profiles" table.' 
+      message: 'Connection Gap: Your Neon DB is not receiving signup events from Clerk.' 
     },
     { 
       step: DiagnosticStep.SESSION_VALIDATION, 
       status: 'error', 
-      message: 'Ghost Session: Browser holds stale auth state from deleted database records.' 
+      message: 'Ghost Data: You are seeing old data because your Clerk session is still active.' 
     }
-  ]);
+  ];
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
     try {
-      const logs = `
-        Status: Build error resolved.
-        Issue: Clerk user created but Neon 'profiles' row is missing.
-        Sync: Need to implement SVIX-verified webhook for Next.js.
-      `;
-      const result = await analyzeSyncIssue(logs);
+      const result = await analyzeSyncIssue("User deleted Neon rows. Clerk session still active. New users not populating Neon.");
       setAnalysis(result);
     } catch (err) {
-      console.error("Analysis failed", err);
+      console.error("Sync analysis failed:", err);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 font-sans selection:bg-blue-500/30 bg-slate-900 min-h-screen text-slate-100">
-      <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-800 pb-12">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
-            Build Status: Clean & Verified
+    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <header className="mb-16 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-800 pb-12">
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-[10px] font-black tracking-widest uppercase">
+                Vercel Deploy Verifier: v1.0.6
+              </span>
+            </div>
+            <h1 className="text-5xl font-black text-white tracking-tighter">
+              Fix <span className="text-indigo-500">Sync Bridge</span>
+            </h1>
+            <p className="text-slate-400 mt-2 text-lg font-medium">Solving the Clerk-to-Neon data disconnect.</p>
           </div>
-          <h1 className="text-5xl font-black text-white tracking-tight">
-            Sync <span className="text-blue-500">Bridge</span>
-          </h1>
-          <p className="text-slate-400 text-lg mt-2 max-w-xl leading-relaxed">
-            Fixing the Clerk-to-Neon pipeline and resolving stale session data.
-          </p>
-        </div>
-        
-        <div className="bg-slate-800/80 px-6 py-4 rounded-2xl border border-slate-700 flex flex-col gap-1 shadow-2xl">
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resolver Entry</span>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div>
-            <span className="text-xs font-bold text-white tracking-tight uppercase">Root App Active</span>
+          
+          <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase">System Status</p>
+              <p className="text-xs font-bold text-white uppercase tracking-tight">Resolver Active</p>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] p-8 border border-slate-700 shadow-2xl">
-            <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 text-center">Diagnostic Pipeline</h2>
-            <div className="space-y-10">
-              {diagnostics.map((d, i) => (
-                <div key={i} className="group relative pl-10">
-                  <div className="absolute left-[3px] top-0 bottom-[-40px] w-px bg-slate-700 group-last:bg-transparent"></div>
-                  <div className={`absolute left-0 top-1.5 h-2 w-2 rounded-full z-10 ${
-                    d.status === 'success' ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : 
-                    d.status === 'error' ? 'bg-red-500 shadow-[0_0_12px_#ef4444]' : 'bg-amber-500 shadow-[0_0_12px_#f59e0b]'
-                  }`}></div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-black text-slate-200 uppercase tracking-wider mb-2">{d.step}</span>
-                    <p className="text-xs text-slate-500 leading-relaxed font-medium">{d.message}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl">
+              <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 text-center">Diagnostic Pipeline</h2>
+              <div className="space-y-10">
+                {diagnostics.map((d, i) => (
+                  <div key={i} className="relative pl-10">
+                    <div className="absolute left-[3px] top-2 bottom-[-40px] w-px bg-slate-800 last:hidden"></div>
+                    <div className={`absolute left-0 top-2 h-2 w-2 rounded-full z-10 ${
+                      d.status === 'success' ? 'bg-emerald-500' : d.status === 'error' ? 'bg-rose-500' : 'bg-amber-500'
+                    }`}></div>
+                    <p className="text-xs font-black text-slate-100 uppercase tracking-wider mb-1">{d.step}</p>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{d.message}</p>
                   </div>
+                ))}
+              </div>
+
+              <button 
+                onClick={runAnalysis}
+                disabled={isAnalyzing}
+                className="w-full mt-12 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-[0.97] disabled:opacity-50"
+              >
+                {isAnalyzing ? 'Processing Fix...' : 'Build Webhook Bridge'}
+              </button>
+            </div>
+
+            <div className="bg-rose-500/5 border border-rose-500/10 p-8 rounded-[2rem] space-y-4">
+              <h3 className="text-rose-400 font-bold text-xs uppercase tracking-widest">Crucial: Why you see old data</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Deleting Neon rows <strong>does not delete the Clerk session</strong> in your browser. 
+                <br/><br/>
+                If you see "old user data" in the UI, your browser is still holding a <strong>valid Clerk JWT</strong>. Log out manually in your app to clear the cache.
+              </p>
+            </div>
+          </div>
+
+          <div className="lg:col-span-8">
+            {!analysis && !isAnalyzing ? (
+              <div className="bg-slate-950 border-2 border-dashed border-slate-900 rounded-[3rem] p-20 text-center flex flex-col items-center justify-center min-h-[500px]">
+                <div className="w-20 h-20 bg-indigo-500/5 rounded-full flex items-center justify-center mb-6 border border-indigo-500/10 text-indigo-500">
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" /></svg>
                 </div>
-              ))}
-            </div>
-
-            <button 
-              onClick={runAnalysis}
-              disabled={isAnalyzing}
-              className="w-full mt-12 py-5 px-6 bg-blue-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest transition-all hover:bg-blue-500 transform active:scale-[0.97] shadow-2xl shadow-blue-500/20 disabled:opacity-50"
-            >
-              {isAnalyzing ? 'Generating Fix...' : 'Repair Connection'}
-            </button>
-          </div>
-
-          <div className="bg-amber-500/5 p-8 rounded-[2rem] border border-amber-500/10 space-y-6">
-            <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest">Stale Session Warning</h3>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              If you deleted Neon rows, your browser still has a <strong>Clerk JWT</strong>. The app thinks you are logged in, but has no data to show.
-              <br/><br/>
-              To fix: Click <strong>"Sign Out"</strong> in your JobFlow app or clear cookies for <code>jobflow-ai-lime.vercel.app</code>.
-            </p>
-          </div>
-        </div>
-
-        <div className="lg:col-span-8 space-y-8">
-          {!analysis && !isAnalyzing && (
-            <div className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-[3rem] p-20 text-center flex flex-col items-center justify-center min-h-[600px]">
-              <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/20">
-                <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                <h3 className="text-2xl font-bold text-white mb-2">Build The Fix</h3>
+                <p className="text-slate-500 text-sm max-w-sm font-medium">The fix for your sync issue is a server-side webhook handler. Click the button to generate the required Next.js code.</p>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Vercel Build Conflict Resolved</h3>
-              <p className="text-slate-500 text-sm max-w-xs mx-auto">The phantom "AutomationModal" import was removed. Use the tool to generate the Neon sync webhook.</p>
-            </div>
-          )}
-
-          {isAnalyzing && (
-            <div className="space-y-8 min-h-[600px] animate-pulse">
-              <div className="h-10 bg-slate-800 rounded-2xl w-1/4"></div>
-              <div className="h-[550px] bg-slate-800 rounded-[3rem]"></div>
-            </div>
-          )}
-
-          {analysis && (
-            <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
-              <div className="bg-slate-800/30 backdrop-blur-3xl rounded-[3rem] p-10 border border-slate-700 shadow-2xl space-y-10">
-                <section>
-                  <h2 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">Repair Instructions</h2>
-                  <div className="p-8 bg-blue-500/5 rounded-[2rem] border border-blue-500/10 text-slate-300 text-sm leading-relaxed">
-                    {analysis.explanation}
-                  </div>
-                </section>
-
-                <section>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">app/api/webhooks/clerk/route.ts</h2>
-                    <span className="text-[10px] font-bold text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase">Next.js Route Handler</span>
-                  </div>
-                  <CodeBlock code={analysis.fixCode} language="typescript" />
-                </section>
-
-                <section>
-                  <h2 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-6">Environment Variables</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {analysis.recommendations.map((rec: string, i: number) => (
-                      <div key={i} className="p-5 bg-slate-900/50 rounded-2xl border border-slate-800 text-slate-400 text-[11px] flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-blue-500 flex-shrink-0">{i+1}</div>
-                        {rec}
-                      </div>
-                    ))}
-                  </div>
-                </section>
+            ) : isAnalyzing ? (
+              <div className="space-y-8 animate-pulse">
+                <div className="h-10 bg-slate-900 rounded-xl w-1/4"></div>
+                <div className="h-[450px] bg-slate-900 rounded-[2.5rem]"></div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                <div className="bg-slate-900/30 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-10">
+                  <section>
+                    <h2 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6">Repair Instructions</h2>
+                    <div className="p-8 bg-indigo-500/5 rounded-[2rem] border border-indigo-500/10 text-slate-300 text-sm leading-relaxed font-medium">
+                      {analysis.explanation}
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">api/webhooks/clerk.ts</h2>
+                      <span className="text-[10px] font-bold text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase tracking-widest">Next.js API Route</span>
+                    </div>
+                    <CodeBlock code={analysis.fixCode} language="typescript" />
+                  </section>
+
+                  <section>
+                    <h2 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-6">Vercel Environment Setup</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {analysis.recommendations.map((rec: string, i: number) => (
+                        <div key={i} className="p-5 bg-slate-950 rounded-2xl border border-slate-900 text-slate-400 text-[11px] flex items-center gap-4 font-medium">
+                          <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center font-bold text-indigo-500 border border-slate-800">{i+1}</div>
+                          {rec}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
