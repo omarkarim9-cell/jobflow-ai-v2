@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { analyzeSyncIssue } from '../services/geminiService'; 
+import { analyzeSyncIssue } from './services/geminiService'; 
 import { DiagnosticResult, DiagnosticStep } from './types';
 import CodeBlock from './components/CodeBlock';
 
@@ -11,8 +11,8 @@ const App: React.FC = () => {
   const [diagnostics] = useState<DiagnosticResult[]>([
     { step: DiagnosticStep.CLERK_AUTH, status: 'success', message: 'Clerk SDK initialized.' },
     { step: DiagnosticStep.WEBHOOK_RECEPTION, status: 'warning', message: 'Endpoint: jobflow-ai-lime.vercel.app/api/webhooks/clerk' },
-    { step: DiagnosticStep.NEON_INSERTION, status: 'error', message: 'Table "profiles" sync logic required.' },
-    { step: DiagnosticStep.SESSION_VALIDATION, status: 'error', message: 'Ghost session detected: JWT exists, DB record missing.' }
+    { step: DiagnosticStep.NEON_INSERTION, status: 'error', message: 'Neon profiles table out of sync.' },
+    { step: DiagnosticStep.SESSION_VALIDATION, status: 'error', message: 'Ghost session detected: JWT valid, DB empty.' }
   ]);
 
   const runAnalysis = async () => {
@@ -20,8 +20,8 @@ const App: React.FC = () => {
     try {
       const logs = `
         Domain: jobflow-ai-lime.vercel.app
-        Issue: Build error fix applied. Generating final webhook.
-        Database: Neon PostgreSQL (profiles table)
+        Issue: Clerk 'whsec_' secret identified. Need final code for user.created/updated.
+        Database: Neon (Profiles table)
       `;
       const result = await analyzeSyncIssue(logs);
       setAnalysis(result);
@@ -34,24 +34,24 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 font-sans selection:bg-blue-500/30">
-      <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-800 pb-12">
+      <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-800 pb-12 text-center md:text-left">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
-            Instance: jobflow-ai-v2
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold tracking-[0.2em] uppercase mb-4 mx-auto md:mx-0">
+            Fixing: jobflow-ai-lime.vercel.app
           </div>
           <h1 className="text-5xl font-black text-white tracking-tight">
-            Sync <span className="text-blue-500 font-outline-2">Engine</span>
+            Cloud <span className="text-blue-500">Synchronizer</span>
           </h1>
           <p className="text-slate-400 text-lg mt-2 max-w-xl leading-relaxed">
-            Deployment Fix for <strong>jobflow-ai-lime.vercel.app</strong>
+            Clerk "Signing Secret" (whsec_...) is confirmed. Ready to deploy.
           </p>
         </div>
         
-        <div className="bg-slate-800/80 px-6 py-4 rounded-2xl border border-slate-700 flex flex-col gap-1 shadow-xl shadow-blue-500/5">
+        <div className="bg-slate-800/80 px-6 py-4 rounded-2xl border border-slate-700 flex flex-col gap-1 shadow-xl shadow-blue-500/5 items-center md:items-start">
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Build Resolution</span>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
-            <span className="text-xs font-bold text-white">Import: ../services/geminiService</span>
+            <span className="text-xs font-bold text-white">Path Fixed: ./services/geminiService</span>
           </div>
         </div>
       </header>
@@ -59,7 +59,7 @@ const App: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] p-8 border border-slate-700 shadow-2xl">
-            <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 text-center">Diagnostic Pipeline</h2>
+            <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-10 text-center">Status Overview</h2>
             <div className="space-y-10">
               {diagnostics.map((d, i) => (
                 <div key={i} className="group relative pl-10">
@@ -81,20 +81,25 @@ const App: React.FC = () => {
               disabled={isAnalyzing}
               className="w-full mt-12 py-5 px-6 bg-blue-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest transition-all hover:bg-blue-500 transform active:scale-[0.97] shadow-2xl shadow-blue-500/20 disabled:opacity-50"
             >
-              {isAnalyzing ? 'Mapping Production Fix...' : 'Generate Sync Solution'}
+              {isAnalyzing ? 'Mapping Sync Logic...' : 'Generate Sync Code'}
             </button>
           </div>
 
-          <div className="bg-blue-600/5 p-8 rounded-[2rem] border border-blue-500/10">
-            <h3 className="text-blue-400 font-bold mb-4 text-xs uppercase tracking-widest flex items-center gap-2">
-              Env Setup Guide
-            </h3>
-            <div className="space-y-4">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                • <strong>DATABASE_URL</strong>: Neon Connection String.<br/>
-                • <strong>CLERK_WEBHOOK_SECRET</strong>: From Clerk Webhook settings.<br/>
-                • <strong>CLERK_SECRET_KEY</strong>: Your Clerk API Key.
-              </p>
+          <div className="bg-slate-800/40 p-8 rounded-[2rem] border border-slate-700">
+            <h3 className="text-blue-400 font-bold mb-6 text-xs uppercase tracking-widest">Dashboards Checklist</h3>
+            <div className="space-y-6">
+              <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Clerk Secret</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  The <code className="bg-slate-800 text-blue-300 px-1 rounded">whsec_...</code> you found is your <strong className="text-white">CLERK_WEBHOOK_SECRET</strong>. Add it to Vercel Env Vars now.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Event Subscriptions</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  In Clerk Webhooks, click your endpoint, go to <strong>Events</strong>, and check <code className="text-emerald-400">user.created</code> and <code className="text-emerald-400">user.updated</code>.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -102,18 +107,18 @@ const App: React.FC = () => {
         <div className="lg:col-span-8 space-y-8">
           {!analysis && !isAnalyzing && (
             <div className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-[3rem] p-20 text-center flex flex-col items-center justify-center min-h-[600px]">
-              <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6">
-                <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+              <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mb-8 border border-blue-500/20">
+                <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-10.714A11.022 11.022 0 0010 12.571m6.858 5.429A11.028 11.028 0 0115 21a11.03 11.03 0 01-4.858-1.143m1.858-12.857A11.021 11.021 0 0013 2.571m0 0a11.017 11.017 0 012.84 7.443m-2.84-7.443l-2.84 7.443m2.84-7.443v9.929m0 0a11.017 11.017 0 012.84-7.443m-2.84 7.443l2.84-7.443" /></svg>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Build Ready</h3>
-              <p className="text-slate-500 text-sm max-w-xs mx-auto">Click generate to receive the production-ready code for your Clerk Webhook.</p>
+              <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Ready to Resolve Sync</h3>
+              <p className="text-slate-500 text-sm max-w-sm mx-auto">Generate the production file for <strong>api/webhooks/clerk.ts</strong> with your whsec secret handling.</p>
             </div>
           )}
 
           {isAnalyzing && (
             <div className="space-y-8 min-h-[600px] animate-pulse">
               <div className="h-10 bg-slate-800 rounded-2xl w-1/4"></div>
-              <div className="h-[500px] bg-slate-800 rounded-[3rem]"></div>
+              <div className="h-[550px] bg-slate-800 rounded-[3rem]"></div>
             </div>
           )}
 
@@ -121,7 +126,7 @@ const App: React.FC = () => {
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
               <div className="bg-slate-800/30 backdrop-blur-3xl rounded-[3rem] p-10 border border-slate-700 shadow-2xl space-y-10">
                 <section>
-                  <h2 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">Root Cause & Logic</h2>
+                  <h2 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">Expert Insight</h2>
                   <div className="p-8 bg-blue-500/5 rounded-[2rem] border border-blue-500/10 text-slate-300 text-sm leading-relaxed">
                     {analysis.explanation}
                   </div>
@@ -129,18 +134,18 @@ const App: React.FC = () => {
 
                 <section>
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Update: api/webhooks/clerk.ts</h2>
-                    <span className="text-[10px] font-bold text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">Ready for Vercel</span>
+                    <h2 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Production Code: api/webhooks/clerk.ts</h2>
+                    <span className="text-[10px] font-bold text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">Optimized for jobflow-ai-lime</span>
                   </div>
                   <CodeBlock code={analysis.fixCode} language="typescript" />
                 </section>
 
                 <section>
-                  <h2 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-6">Environment Variables</h2>
+                  <h2 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-6">Variable Verification</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {analysis.recommendations.map((rec: string, i: number) => (
-                      <div key={i} className="p-5 bg-slate-900/50 rounded-2xl border border-slate-800 text-slate-400 text-xs flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-blue-400">0{i+1}</div>
+                      <div key={i} className="p-5 bg-slate-900/50 rounded-2xl border border-slate-800 text-slate-400 text-[11px] flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-blue-500 flex-shrink-0">0{i+1}</div>
                         {rec}
                       </div>
                     ))}
