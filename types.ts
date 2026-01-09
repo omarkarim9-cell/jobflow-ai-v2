@@ -27,7 +27,14 @@ export interface Job {
 }
 
 // ===== View / UI =====
-export type ViewState = 'dashboard' | 'jobs' | 'inbox' | 'analytics' | 'settings';
+export enum ViewState {
+  DASHBOARD = 'dashboard',
+  SELECTED_JOBS = 'jobs',
+  TRACKER = 'tracker',
+  EMAILS = 'inbox',
+  ANALYTICS = 'analytics',
+  SETTINGS = 'settings'
+}
 
 // ===== Email / accounts =====
 export interface EmailAccount {
