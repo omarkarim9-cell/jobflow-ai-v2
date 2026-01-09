@@ -1,120 +1,84 @@
-import { NextApiRequest, NextApiResponse } from 'next';
 import { Webhook } from 'svix';
-import { neon } from '@neondatabase/serverless';
-import { buffer } from 'stream/consumers';
+import { headers } from 'next/headers';
+import { WebhookEvent } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import { Pool } from '@neondatabase/serverless';
 
-// 1. Disable Next.js body parsing to verify the raw signature
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Initialize Neon connection pool
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
+export async function POST(req: Request) {
+  // 1. Get the headers
+  const headerPayload = headers();
+  const svix_id = headerPayload.get('svix-id');
+  const svix_timestamp = headerPayload.get('svix-timestamp');
+  const svix_signature = headerPayload.get('svix-signature');
 
-  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-
-  if (!WEBHOOK_SECRET) {
-    console.error('Missing CLERK_WEBHOOK_SECRET');
-    return res.status(500).json({ message: 'Server configuration error' });
-  }
-
-  // 2. verify the SVIX signature
-  const svix_id = req.headers['svix-id'] as string;
-  const svix_timestamp = req.headers['svix-timestamp'] as string;
-  const svix_signature = req.headers['svix-signature'] as string;
-
+  // 2. Validate headers exist
   if (!svix_id || !svix_timestamp || !svix_signature) {
-    return res.status(400).json({ message: 'Missing svix headers' });
+    return new NextResponse('Error: Missing svix headers', { status: 400 });
   }
 
-  let payload: any;
+  // 3. Get the body
+  const payload = await req.json();
+  const body = JSON.stringify(payload);
+
+  // 4. Verify the signature
+  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET as string);
+  let evt: WebhookEvent;
 
   try {
-    // Read the raw body
-    const rawBody = (await buffer(req)).toString();
-    const wh = new Webhook(WEBHOOK_SECRET);
-    payload = wh.verify(rawBody, {
+    evt = wh.verify(body, {
       'svix-id': svix_id,
       'svix-timestamp': svix_timestamp,
       'svix-signature': svix_signature,
-    });
+    }) as WebhookEvent;
   } catch (err) {
     console.error('Error verifying webhook:', err);
-    return res.status(400).json({ message: 'Webhook verification failed' });
+    return new NextResponse('Error: Verification failed', { status: 400 });
   }
 
-  // 3. Connect to Neon
-  const sql = neon(process.env.DATABASE_URL!);
-  const { type, data } = payload as { type: string; data: any };
+  // 5. Handle the event
+  const eventType = evt.type;
 
-  try {
-    // 4. Handle specific Clerk events
-    if (type === 'user.created') {
-      const email = data.email_addresses?.[0]?.email_address || '';
-      const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
-      const clerkId = data.id;
+  if (eventType === 'user.created' || eventType === 'user.updated') {
+    const { id, email_addresses, first_name, last_name } = evt.data;
 
-      // Insert into 'profiles'. We use the Clerk ID as the Primary Key 'id' for simplicity
-      // Defaults (plan, credits) are handled by DB or explicit values here.
-      await sql`
-        INSERT INTO profiles (
-          id, 
-          clerk_user_id, 
-          email, 
-          full_name, 
-          plan, 
-          daily_ai_credits, 
-          total_ai_used,
-          preferences,
-          connected_accounts,
-          updated_at
-        )
-        VALUES (
-          ${clerkId}, 
-          ${clerkId}, 
-          ${email}, 
-          ${fullName}, 
-          'free', 
-          5, 
-          0,
-          '{"language":"en", "notifications": true}'::jsonb,
-          '{}'::jsonb,
-          NOW()
-        )
-        ON CONFLICT (id) DO NOTHING;
+    // Map data to schema
+    const clerkUserId = id;
+    const email = email_addresses && email_addresses[0] ? email_addresses[0].email_address : null;
+    const fullName = `${first_name || ''} ${last_name || ''}`.trim();
+    
+    // Default preferences if not provided
+    const preferences = JSON.stringify({ language: 'en' });
+
+    try {
+      // Use 'clerk_user_id' as the stable identifier for Neon lookup/upsert.
+      // We assume 'id' in Neon is auto-generated (UUID) or handled by the DB if not passed,
+      // or we can generate one here. For safety, we use ON CONFLICT on the unique clerk_user_id.
+      const query = `
+        INSERT INTO profiles (id, email, full_name, clerk_user_id, daily_ai_credits, preferences, updated_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, 5, $4, NOW())
+        ON CONFLICT (clerk_user_id) 
+        DO UPDATE SET 
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          updated_at = NOW();
       `;
-      console.log(`User created: ${clerkId}`);
+
+      const client = await pool.connect();
+      try {
+        await client.query(query, [email, fullName, clerkUserId, preferences]);
+      } finally {
+        client.release();
+      }
+
+      console.log(`Successfully synced user ${clerkUserId} to Neon.`);
+    } catch (error) {
+      console.error('Database error processing user sync:', error);
+      return new NextResponse('Error: Database operation failed', { status: 500 });
     }
-
-    if (type === 'user.updated') {
-      const email = data.email_addresses?.[0]?.email_address || '';
-      const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
-      const clerkId = data.id;
-
-      await sql`
-        UPDATE profiles 
-        SET 
-          email = ${email}, 
-          full_name = ${fullName}, 
-          updated_at = NOW()
-        WHERE clerk_user_id = ${clerkId};
-      `;
-      console.log(`User updated: ${clerkId}`);
-    }
-
-    // Return 200 to Clerk to acknowledge receipt
-    return res.status(200).json({ success: true });
-
-  } catch (dbError) {
-    console.error('Database error in webhook:', dbError);
-    // Return 500 so Clerk retries the webhook later
-    return res.status(500).json({ message: 'Database sync error' });
   }
+
+  return new NextResponse('Webhook received', { status: 200 });
 }
