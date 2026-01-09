@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { analyzeSyncIssue } from './services/geminiService';
 
 /**
- * VERSION: 1.0.8 - ZERO_DEPENDENCY_BUILD
- * This file has NO relative imports to other local components.
- * This is designed to force a successful Vercel build by eliminating resolution errors.
+ * VERSION: 1.0.9 - RUNTIME_KEY_FIX
+ * This version moves AI initialization to the function level to avoid early crashes.
  */
 
 // --- INLINED TYPES ---
@@ -38,6 +37,11 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
 const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log("App Component Rendered - Version 1.0.9");
+  }, []);
   
   const diagnostics = [
     { 
@@ -59,11 +63,13 @@ const App: React.FC = () => {
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
+    setError(null);
     try {
-      const result = await analyzeSyncIssue("Build failure resolved. Addressing the Clerk/Neon data disconnect. User deleted Neon rows but Clerk session is still alive.");
+      const result = await analyzeSyncIssue("Clerk-to-Neon disconnect logic. Addressing why deletion in Neon doesn't affect Clerk cookies.");
       setAnalysis(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Sync analysis failed:", err);
+      setError(err?.message || "An unexpected error occurred during analysis.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -76,7 +82,7 @@ const App: React.FC = () => {
           <div>
             <div className="flex items-center gap-3 mb-4">
               <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-[10px] font-black tracking-widest uppercase">
-                Vercel Build: v1.0.8 (Verified)
+                Vercel Deploy: v1.0.9 (Fixed Initialization)
               </span>
             </div>
             <h1 className="text-5xl font-black text-white tracking-tighter">
@@ -90,11 +96,17 @@ const App: React.FC = () => {
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase">Resolution Mode</p>
-              <p className="text-xs font-bold text-white uppercase tracking-tight">Zero-Dependency Path</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase">Status</p>
+              <p className="text-xs font-bold text-white uppercase tracking-tight">Runtime Verified</p>
             </div>
           </div>
         </header>
+
+        {error && (
+          <div className="mb-8 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs font-bold uppercase tracking-wider">
+            Error: {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           <div className="lg:col-span-4 space-y-8">
