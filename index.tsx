@@ -2,18 +2,18 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-console.log("JobFlow Repair Tool: v1.0.9 Starting Mount...");
-
+/**
+ * Entry Point for JobFlow Repair Tool
+ */
 const rootElement = document.getElementById('root');
 
-if (!rootElement) {
-  console.error("Failed to find the root element. Ensure index.html has <div id='root'></div>");
-} else {
+if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
   );
-  console.log("JobFlow Repair Tool: v1.0.9 Successfully Mounted.");
+} else {
+  console.error("Critical: Could not find root element in index.html");
 }
