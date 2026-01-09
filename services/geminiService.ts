@@ -5,32 +5,31 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function analyzeSyncIssue(logs: string) {
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `The user is building JobFlow AI. 
-    ENVIRONMENT: Vercel Cloud, GitHub, Neon (DB), Clerk (Auth).
-    PATH: 'api/webhooks/clerk.ts' (Next.js Pages Router).
+    model: 'gemini-3-pro-preview',
+    contents: `You are a senior full-stack engineer fixing a Clerk-to-Neon synchronization issue for JobFlow AI.
     
-    NEON SCHEMA ('profiles' table):
-    - id (TEXT, PRIMARY KEY), email (TEXT, UNIQUE), full_name (TEXT), resume_content (TEXT)
-    - preferences (JSONB, default '{"language":"en", "notifications": true}')
-    - connected_accounts (JSONB, default '{}'), plan (TEXT, default 'free')
-    - daily_ai_credits (INTEGER, default 5), total_ai_used (INTEGER, default 0)
-    - phone (TEXT, default ''), resume_file_name (TEXT, default '')
-    - clerk_user_id (TEXT, UNIQUE), updated_at (TIMESTAMP)
+    ENVIRONMENT: 
+    - Domain: jobflow-ai-lime.vercel.app
+    - Webhook Endpoint: https://jobflow-ai-lime.vercel.app/api/webhooks/clerk
+    - Database: Neon (PostgreSQL)
+    - Auth: Clerk
 
-    CRITICAL INSTRUCTION: 
-    Generate a FULL, COMPLETE, and ROBUST TypeScript file for the webhook. 
-    One line is UNACCEPTABLE. The output 'fixCode' MUST include:
-    1. Imports for 'svix', 'NextApiRequest', 'NextApiResponse'.
-    2. A database client initialization (assume @neondatabase/serverless or similar).
-    3. Signature verification logic using Svix and CLERK_WEBHOOK_SECRET.
-    4. An async handler function.
-    5. 'user.created' and 'user.updated' case logic mapping Clerk fields to the EXACT column names above.
-    6. Try/catch blocks and proper 200/400/500 status responses.
+    NEON SCHEMA ('profiles' table):
+    - id (TEXT, PRIMARY KEY), email (TEXT, UNIQUE), full_name (TEXT)
+    - clerk_user_id (TEXT, UNIQUE), daily_ai_credits (INTEGER, default 5)
+    - preferences (JSONB, default '{"language":"en"}'), updated_at (TIMESTAMP)
+
+    CRITICAL REQUIREMENT:
+    Generate the FULL contents of 'api/webhooks/clerk.ts'. 
+    - DO NOT provide a snippet. 
+    - Use 'svix' for header verification.
+    - Map Clerk's 'first_name' and 'last_name' to 'full_name'.
+    - Use 'clerk_user_id' for the Neon lookup/insert.
+    - Return 200 on success, 400 on signature fail.
 
     ALSO:
-    7. Explain 'Ghost Sessions': Why browser sessions persist even if Neon rows are deleted.
-    8. List required Vercel Env Vars: CLERK_WEBHOOK_SECRET, DATABASE_URL.
+    - Explain that 'Ghost Sessions' exist because Clerk sessions live in browser cookies/JWTs and are independent of your Neon database state.
+    - List these Vercel Env Vars specifically: DATABASE_URL, CLERK_WEBHOOK_SECRET, CLERK_SECRET_KEY.
 
     Logs: ${logs}`,
     config: {
