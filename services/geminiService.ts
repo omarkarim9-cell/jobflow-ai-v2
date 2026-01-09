@@ -1,45 +1,48 @@
 /**
- * Service to analyze Clerk-to-Neon sync issues.
- * Uses dynamic imports to prevent top-level crashes in the browser.
+ * JobFlow AI Sync Diagnostic Service
+ * This service is purely functional to avoid any top-level execution errors.
  */
-export async function analyzeSyncIssue(logs: string) {
+export async function analyzeSyncIssue(context: string) {
   const apiKey = process.env.API_KEY;
 
-  if (!apiKey || apiKey === "") {
-    throw new Error("API_KEY is missing. Please ensure it is set in your environment variables.");
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please ensure process.env.API_KEY is configured.");
   }
 
-  // Dynamically import the library only when this function is called.
-  // This prevents the "API Key must be set when running in a browser" crash at load-time.
+  // We import dynamically to prevent the SDK from initializing before we have checked the API Key.
   const { GoogleGenAI, Type } = await import("@google/genai");
-
   const ai = new GoogleGenAI({ apiKey });
-  
+
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: `You are a senior full-stack engineer fixing a Clerk-to-Neon synchronization issue for JobFlow AI.
+    contents: `You are a senior systems architect. Solve this Clerk-to-Neon sync issue for JobFlow AI.
     
-    ISSUE:
-    The user deleted all rows in Neon, but they are still logged in via Clerk. They see "Ghost Data" because the Clerk session exists in browser cookies while the Neon database is empty.
+    USER PROBLEM:
+    - User is created in Clerk but not in Neon database.
+    - User sees old session data even after deleting Neon rows.
     
-    TASK:
-    1. Explain the disconnect between Clerk's Auth state (Browser Cookies) and Neon's DB state.
-    2. Provide a full Next.js Route Handler for 'api/webhooks/clerk/route.ts'.
-    3. The code must use 'svix' to verify the webhook signature.
-    4. On 'user.created', it should UPSERT the user into the Neon 'profiles' table.
-    5. Map fields: user.id -> clerk_user_id, user.email_addresses[0].email_address -> email.
-
-    Contextual Logs: ${logs}`,
+    TECHNICAL CAUSE:
+    1. The Clerk 'user.created' webhook is likely missing or failing.
+    2. Stale data persists because Clerk JWTs (sessions) in the browser are independent of the Neon Postgres state.
+    
+    OUTPUT JSON FORMAT:
+    {
+      "explanation": "Brief clear text explaining the disconnect.",
+      "routeHandler": "Full Next.js code for api/webhooks/clerk/route.ts using svix and drizzle or prisma (whichever fits a Neon setup).",
+      "steps": ["Step 1...", "Step 2..."]
+    }
+    
+    Context: ${context}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           explanation: { type: Type.STRING },
-          fixCode: { type: Type.STRING },
-          recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+          routeHandler: { type: Type.STRING },
+          steps: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
-        required: ["explanation", "fixCode", "recommendations"]
+        required: ["explanation", "routeHandler", "steps"]
       }
     }
   });
