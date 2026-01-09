@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-
 import {
   AreaChart,
   Area,
@@ -11,9 +10,19 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  Cell,
+  Cell
 } from 'recharts';
 import { translations } from '../services/localization';
+import {
+  Search,
+  Send,
+  Users,
+  Star,
+  BarChart3,
+  TrendingUp,
+  SettingsIcon,
+  AlertCircle
+} from 'lucide-react';
 
 interface DashboardStatsProps {
   jobs: Job[];
