@@ -1,29 +1,32 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
+/**
+ * Service to analyze Clerk-to-Neon sync issues.
+ * Initialization is deferred to the function call to ensure process.env.API_KEY
+ * is correctly accessed in the browser context at runtime.
+ */
 export async function analyzeSyncIssue(logs: string) {
-  // Initialize inside the function to ensure process.env.API_KEY is accessed at runtime
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable is not defined. Please check your Vercel/Environment settings.");
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `You are a senior full-stack engineer fixing a Clerk-to-Neon synchronization issue for JobFlow AI.
     
-    ENVIRONMENT: 
-    - Domain: jobflow-ai-v2.vercel.app
-    - Database: Neon (PostgreSQL)
-    - Auth: Clerk
-
-    TASK:
-    1. Generate a robust Next.js API route for Clerk Webhooks (api/webhooks/clerk/route.ts).
-    2. Use 'svix' for header validation.
-    3. The webhook should listen for 'user.created'.
-    4. On 'user.created', it must INSERT a new row into the 'profiles' table in Neon.
-    5. Map the fields correctly: id -> clerk_user_id, email_addresses[0].email_address -> email, etc.
+    ISSUE:
+    The user deleted all rows in Neon, but they are still logged in via Clerk. They see "Ghost Data" because the Clerk session exists in browser cookies while the Neon database is empty.
     
-    EXPLAIN:
-    Briefly explain why the user still sees "Old Session Data" even after deleting Neon rows (Clerk JWTs in browser cookies vs Database state).
+    TASK:
+    1. Explain the disconnect between Clerk's Auth state (Browser Cookies) and Neon's DB state.
+    2. Provide a full Next.js Route Handler for 'api/webhooks/clerk/route.ts'.
+    3. The code must use 'svix' to verify the webhook signature.
+    4. On 'user.created' or 'session.created', it should UPSERT the user into the Neon 'profiles' table.
+    5. Map fields: user.id -> clerk_user_id, user.email_addresses[0].email_address -> email.
 
-    Logs: ${logs}`,
+    Contextual Logs: ${logs}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
