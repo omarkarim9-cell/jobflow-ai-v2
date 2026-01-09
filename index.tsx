@@ -2,13 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-const rootElement = document.getElementById('root');
+console.log("JobFlow Sync Tool: v1.0.6 Mounting...");
 
-if (!rootElement) {
-  throw new Error("Critical Error: Root element '#root' not found.");
-}
-
-const root = ReactDOM.createRoot(rootElement);
+const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(
   <React.StrictMode>
     <App />
