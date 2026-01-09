@@ -1,6 +1,7 @@
-// /api/profile.ts
+// /api/profile.ts or app/api/profile/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { getAuth } from '@clerk/nextjs/server';
 import { UserProfile } from '../types';
 
 const sql = postgres(process.env.DATABASE_URL as string, {
@@ -9,7 +10,7 @@ const sql = postgres(process.env.DATABASE_URL as string, {
 
 // Row type matching the profiles table
 interface ProfileRow {
-  id: number;
+  id: string;                 // matches TEXT primary key in schema
   clerk_user_id: string;
   full_name: string;
   email: string;
@@ -24,11 +25,10 @@ interface ProfileRow {
   updated_at: Date;
 }
 
-// Helper to get user id – adapt to how you pass it from Clerk
+// Helper to get user id from Clerk (Bearer token coming from dbService)
 function getUserId(req: NextRequest): string | null {
-  const headerId = req.headers.get('x-clerk-user-id');
-  if (headerId) return headerId;
-  return null;
+  const { userId } = getAuth(req);
+  return userId ?? null;
 }
 
 // GET /api/profile
@@ -64,13 +64,14 @@ export async function GET(req: NextRequest) {
     `;
 
     if (!rows.length) {
+      // No profile yet for this user; let frontend treat as "needs onboarding"
       return NextResponse.json(null, { status: 200 });
     }
 
     const row = rows[0];
 
     const profile: UserProfile = {
-      id: row.clerk_user_id,
+      id: row.clerk_user_id, // use Clerk user id as app-level id
       fullName: row.full_name || '',
       email: row.email || '',
       phone: row.phone || '',
@@ -121,12 +122,12 @@ export async function POST(req: NextRequest) {
       body.preferences && typeof body.preferences === 'object'
         ? body.preferences
         : {
-          targetRoles: [],
-          targetLocations: [],
-          minSalary: '',
-          remoteOnly: false,
-          language: 'en',
-        };
+            targetRoles: [],
+            targetLocations: [],
+            minSalary: '',
+            remoteOnly: false,
+            language: 'en',
+          };
 
     const connected =
       body.connectedAccounts && Array.isArray(body.connectedAccounts)
