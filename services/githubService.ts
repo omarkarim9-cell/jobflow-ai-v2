@@ -1,3 +1,4 @@
+//geminiservice.ts
 import { Job } from '../types';
 
 /**
@@ -97,4 +98,5 @@ export const verifyGithubRepo = async (token: string, repo: string): Promise<boo
     } catch (e) {
         return false;
     }
+
 };
