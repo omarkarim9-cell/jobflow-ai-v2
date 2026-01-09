@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { analyzeSyncIssue } from './services/geminiService'; 
-import { DiagnosticResult, DiagnosticStep } from './types';
+import { DiagnosticResult, DiagnosticStep } from './types.ts';
 import CodeBlock from './components/CodeBlock';
 
 const App: React.FC = () => {
@@ -162,3 +162,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
