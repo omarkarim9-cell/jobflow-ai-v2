@@ -1,7 +1,15 @@
 // types.ts
 
 // ===== Jobs =====
-export type JobStatus = 'saved' | 'applied' | 'interview' | 'offer' | 'rejected';
+export enum JobStatus {
+  DETECTED = 'detected',
+  SAVED = 'saved',
+  APPLIED_AUTO = 'applied_auto',
+  APPLIED_MANUAL = 'applied_manual',
+  INTERVIEW = 'interview',
+  OFFER = 'offer',
+  REJECTED = 'rejected'
+}
 
 export interface Job {
   id: string;
@@ -13,6 +21,7 @@ export interface Job {
   source: string;            // e.g. 'linkedin', 'indeed'
   status: JobStatus;
   appliedAt?: string;        // ISO date
+  detectedAt: string;        // ISO date - required for DashboardStats
   createdAt?: string;        // ISO date
   updatedAt?: string;        // ISO date
 }
