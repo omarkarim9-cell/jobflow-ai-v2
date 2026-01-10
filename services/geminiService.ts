@@ -1,3 +1,17 @@
+// At the top of the file, add proper error handling
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!GEMINI_API_KEY) {
+  console.error('Missing GEMINI_API_KEY');
+}
+
+// Then wherever you use it (around line 50), do:
+const apiKey = GEMINI_API_KEY || '';
+
+// Or better, throw an error early:
+if (!GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY is required');
+}
 /**
  * JobFlow AI Sync Diagnostic Service
  * This service is purely functional to avoid any top-level execution errors.
@@ -49,3 +63,4 @@ export async function analyzeSyncIssue(context: string) {
 
   return JSON.parse(response.text);
 }
+
