@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { analyzeSyncIssue } from '../services/geminiService.ts';
+import { analyzeSyncIssue } from '../services/geminiService';
 
 // --- INLINED COMPONENTS ---
 
@@ -156,6 +156,7 @@ const App = () => {
 };
 
 export default App;
+
 
 
 
