@@ -1,37 +1,13 @@
 {
   "name": "jobflow-ai-pro",
-  "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vite build"
   },
   "dependencies": {
-    "@clerk/backend": "^2.29.0",
-    "@clerk/clerk-react": "^5.21.0",
-    "@clerk/nextjs": "^6.9.6",
-    "@google/genai": "^1.30.0",
-    "@google/generative-ai": "^0.24.1",
-    "@neondatabase/serverless": "0.10.4",
-    "@types/node": "^20.11.0",
-    "@types/react": "^18.3.1",
-    "@types/react-dom": "^18.3.1",
-    "@vercel/node": "^3.0.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "lucide-react": "^0.460.0",
-    "next": "^15.1.0",
-    "postgres": "^3.4.8",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "recharts": "^2.13.3",
-    "typescript": "^5.5.3",
     "vite": "^5.4.8"
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.4.1",
-    "postcss": "^8.4.35",
-    "autoprefixer": "^10.4.17"
   }
 }
