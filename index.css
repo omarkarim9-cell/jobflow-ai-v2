@@ -1,40 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-body { 
-  font-family: 'Inter', sans-serif; 
-}
-
-::-webkit-scrollbar { 
-  width: 6px; 
-  height: 6px; 
-}
-
-::-webkit-scrollbar-track { 
-  background: #f1f5f9; 
-}
-
-::-webkit-scrollbar-thumb { 
-  background: #cbd5e1; 
-  border-radius: 3px; 
-}
-
-::-webkit-scrollbar-thumb:hover { 
-  background: #94a3b8; 
-}
-
-.cl-rootBox { 
-  width: 100%; 
-}
-
-.cl-card { 
-  box-shadow: none !important; 
-  border: 1px solid #e2e8f0 !important; 
-}
-
-/* Custom Scrollbar for specific containers */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
