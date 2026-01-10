@@ -3,8 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './components/App';
 import './index.css';
-
-
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!CLERK_PUBLISHABLE_KEY) {
@@ -19,4 +17,5 @@ root.render(
     </ClerkProvider>
   </React.StrictMode>
 );
+
 
