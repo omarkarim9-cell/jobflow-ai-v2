@@ -1,25 +1,21 @@
 import { Webhook } from 'svix';
 import { neon } from '@neondatabase/serverless';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-async function buffer(readable: any) {
-  const chunks = [];
-  for await (const chunk of readable) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  }
-  return Buffer.concat(chunks);
-}
-
 export default async function handler(req: any, res: any) {
-  console.log('🔔 Webhook received:', req.method);
+  console.log('🔔 Webhook received:', req.method, req.url);
+  console.log('📋 Headers:', req.headers);
 
+  // Allow Clerk's webhook validation
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, svix-id, svix-timestamp, svix-signature');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   if (req.method !== 'POST') {
-    console.log('❌ Method not allowed');
+    console.log('❌ Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -29,14 +25,28 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: 'Webhook secret not configured' });
   }
 
-  const payload = (await buffer(req)).toString();
+  let payload: string;
+  try {
+    // Handle body parsing
+    if (typeof req.body === 'string') {
+      payload = req.body;
+    } else if (Buffer.isBuffer(req.body)) {
+      payload = req.body.toString();
+    } else {
+      payload = JSON.stringify(req.body);
+    }
+  } catch (err) {
+    console.error('❌ Failed to parse body:', err);
+    return res.status(400).json({ error: 'Invalid body' });
+  }
+
   const headers = {
-    'svix-id': req.headers['svix-id'],
-    'svix-timestamp': req.headers['svix-timestamp'],
-    'svix-signature': req.headers['svix-signature'],
+    'svix-id': req.headers['svix-id'] as string,
+    'svix-timestamp': req.headers['svix-timestamp'] as string,
+    'svix-signature': req.headers['svix-signature'] as string,
   };
 
-  console.log('📋 Headers received:', headers);
+  console.log('📋 Svix headers:', headers);
 
   let event;
   try {
@@ -52,7 +62,7 @@ export default async function handler(req: any, res: any) {
   if (event.type === 'user.created') {
     console.log('👤 User created event received');
     const { id, email_addresses, first_name, last_name } = event.data;
-
+    
     const email = email_addresses?.[0]?.email_address || '';
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
 
@@ -66,10 +76,9 @@ export default async function handler(req: any, res: any) {
       }
 
       const sql = neon(DATABASE_URL);
-
+      
       console.log('💾 Inserting user into Neon...');
-
-      // Insert user into Neon
+      
       const result = await sql`
         INSERT INTO user_profiles (
           id, 
@@ -107,11 +116,11 @@ export default async function handler(req: any, res: any) {
       console.log('✅ User inserted:', result);
       return res.status(200).json({ success: true, userId: id });
     } catch (error: any) {
-      console.error('❌ Database error:', error.message, error.stack);
+      console.error('❌ Database error:', error.message);
       return res.status(500).json({ error: 'Database error', details: error.message });
     }
   }
 
-  console.log('ℹ️ Event type not handled:', event.type);
-  return res.status(200).json({ received: true });
+  console.log('ℹ️ Event received:', event.type);
+  return res.status(200).json({ received: true, type: event.type });
 }
