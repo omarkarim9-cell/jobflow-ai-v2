@@ -48,7 +48,6 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
-  // Handle user.created event
   if (event.type === 'user.created') {
     console.log('👤 User created event received');
     const { id, email_addresses, first_name, last_name } = event.data;
@@ -69,24 +68,20 @@ export default async function handler(req: any, res: any) {
 
       console.log('💾 Inserting user into Neon...');
 
-      // Insert user into Neon
       const result = await sql`
-  INSERT INTO profiles (
-    id, clerk_user_id, full_name, email, plan, daily_ai_credits, total_ai_used, updated_at
-  ) VALUES (
-    gen_random_uuid(), ${id}, ${fullName}, ${email}, 'free', 5, 0, NOW()
-  )
-  ON CONFLICT (clerk_user_id) DO UPDATE SET
-    full_name = EXCLUDED.full_name,
-    email = EXCLUDED.email,
-    updated_at = NOW()
-  RETURNING id
-`;  // ← THIS MUST BE HERE
+        INSERT INTO profiles (id, clerk_user_id, full_name, email, plan, daily_ai_credits, total_ai_used, updated_at)
+        VALUES (gen_random_uuid(), ${id}, ${fullName}, ${email}, 'free', 5, 0, NOW())
+        ON CONFLICT (clerk_user_id) DO UPDATE SET
+          full_name = EXCLUDED.full_name,
+          email = EXCLUDED.email,
+          updated_at = NOW()
+        RETURNING id
+      `;
 
       console.log('✅ User inserted:', result);
       return res.status(200).json({ success: true, userId: id });
     } catch (error: any) {
-      console.error('❌ Database error:', error.message, error.stack);
+      console.error('❌ Database error:', error.message);
       return res.status(500).json({ error: 'Database error', details: error.message });
     }
   }
