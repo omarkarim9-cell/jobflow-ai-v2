@@ -1,84 +1,117 @@
 import { Webhook } from 'svix';
-import { headers } from 'next/headers';
-import { WebhookEvent } from '@clerk/nextjs/server';
-import { NextResponse } from 'next/server';
-import { Pool } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
-// Initialize Neon connection pool
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-export async function POST(req: Request) {
-  // 1. Get the headers
-  const headerPayload = headers();
-  const svix_id = headerPayload.get('svix-id');
-  const svix_timestamp = headerPayload.get('svix-timestamp');
-  const svix_signature = headerPayload.get('svix-signature');
+async function buffer(readable: any) {
+  const chunks = [];
+  for await (const chunk of readable) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
-  // 2. Validate headers exist
-  if (!svix_id || !svix_timestamp || !svix_signature) {
-    return new NextResponse('Error: Missing svix headers', { status: 400 });
+export default async function handler(req: any, res: any) {
+  console.log('🔔 Webhook received:', req.method);
+
+  if (req.method !== 'POST') {
+    console.log('❌ Method not allowed');
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // 3. Get the body
-  const payload = await req.json();
-  const body = JSON.stringify(payload);
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+  if (!WEBHOOK_SECRET) {
+    console.error('❌ Missing CLERK_WEBHOOK_SECRET');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
 
-  // 4. Verify the signature
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET as string);
-  let evt: WebhookEvent;
+  const payload = (await buffer(req)).toString();
+  const headers = {
+    'svix-id': req.headers['svix-id'],
+    'svix-timestamp': req.headers['svix-timestamp'],
+    'svix-signature': req.headers['svix-signature'],
+  };
 
+  console.log('📋 Headers received:', headers);
+
+  let event;
   try {
-    evt = wh.verify(body, {
-      'svix-id': svix_id,
-      'svix-timestamp': svix_timestamp,
-      'svix-signature': svix_signature,
-    }) as WebhookEvent;
-  } catch (err) {
-    console.error('Error verifying webhook:', err);
-    return new NextResponse('Error: Verification failed', { status: 400 });
+    const wh = new Webhook(WEBHOOK_SECRET);
+    event = wh.verify(payload, headers) as any;
+    console.log('✅ Webhook verified, event type:', event.type);
+  } catch (err: any) {
+    console.error('❌ Webhook verification failed:', err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
   }
 
-  // 5. Handle the event
-  const eventType = evt.type;
+  // Handle user.created event
+  if (event.type === 'user.created') {
+    console.log('👤 User created event received');
+    const { id, email_addresses, first_name, last_name } = event.data;
 
-  if (eventType === 'user.created' || eventType === 'user.updated') {
-    const { id, email_addresses, first_name, last_name } = evt.data;
-
-    // Map data to schema
-    const clerkUserId = id;
-    const email = email_addresses && email_addresses[0] ? email_addresses[0].email_address : null;
+    const email = email_addresses?.[0]?.email_address || '';
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
-    
-    // Default preferences if not provided
-    const preferences = JSON.stringify({ language: 'en' });
+
+    console.log('📝 User data:', { id, email, fullName });
 
     try {
-      // Use 'clerk_user_id' as the stable identifier for Neon lookup/upsert.
-      // We assume 'id' in Neon is auto-generated (UUID) or handled by the DB if not passed,
-      // or we can generate one here. For safety, we use ON CONFLICT on the unique clerk_user_id.
-      const query = `
-        INSERT INTO profiles (id, email, full_name, clerk_user_id, daily_ai_credits, preferences, updated_at)
-        VALUES (gen_random_uuid(), $1, $2, $3, 5, $4, NOW())
-        ON CONFLICT (clerk_user_id) 
-        DO UPDATE SET 
-          email = EXCLUDED.email,
-          full_name = EXCLUDED.full_name,
-          updated_at = NOW();
-      `;
-
-      const client = await pool.connect();
-      try {
-        await client.query(query, [email, fullName, clerkUserId, preferences]);
-      } finally {
-        client.release();
+      const DATABASE_URL = process.env.DATABASE_URL;
+      if (!DATABASE_URL) {
+        console.error('❌ Missing DATABASE_URL');
+        return res.status(500).json({ error: 'Database not configured' });
       }
 
-      console.log(`Successfully synced user ${clerkUserId} to Neon.`);
-    } catch (error) {
-      console.error('Database error processing user sync:', error);
-      return new NextResponse('Error: Database operation failed', { status: 500 });
+      const sql = neon(DATABASE_URL);
+
+      console.log('💾 Inserting user into Neon...');
+
+      // Insert user into Neon
+      const result = await sql`
+        INSERT INTO user_profiles (
+          id, 
+          full_name, 
+          email, 
+          phone, 
+          resume_content, 
+          resume_file_name,
+          preferences, 
+          connected_accounts, 
+          plan,
+          daily_ai_credits,
+          total_ai_used,
+          onboarded_at,
+          updated_at
+        ) VALUES (
+          ${id},
+          ${fullName},
+          ${email},
+          '',
+          '',
+          '',
+          '{"targetRoles":[],"targetLocations":[],"minSalary":"","remoteOnly":false,"language":"en"}',
+          '[]',
+          'pro',
+          100,
+          0,
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      `;
+
+      console.log('✅ User inserted:', result);
+      return res.status(200).json({ success: true, userId: id });
+    } catch (error: any) {
+      console.error('❌ Database error:', error.message, error.stack);
+      return res.status(500).json({ error: 'Database error', details: error.message });
     }
   }
 
-  return new NextResponse('Webhook received', { status: 200 });
+  console.log('ℹ️ Event type not handled:', event.type);
+  return res.status(200).json({ received: true });
 }
