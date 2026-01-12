@@ -71,29 +71,17 @@ export default async function handler(req: any, res: any) {
 
       // Insert user into Neon
       const result = await sql`
-      id,
-      clerk_user_id,
-      full_name,
-      email,
-      plan,
-      daily_ai_credits,
-      total_ai_used,
-      updated_at
-    ) VALUES (
-      gen_random_uuid(),
-      ${id},
-      ${fullName},
-      ${email},
-      'free',
-      5,
-      0,
-      NOW()
-    )
-    ON CONFLICT (clerk_user_id) DO UPDATE SET
-      full_name = EXCLUDED.full_name,
-      email = EXCLUDED.email,
-      updated_at = NOW()
-    RETURNING id;
+  INSERT INTO profiles (
+    id, clerk_user_id, full_name, email, plan, daily_ai_credits, total_ai_used, updated_at
+  ) VALUES (
+    gen_random_uuid(), ${id}, ${fullName}, ${email}, 'free', 5, 0, NOW()
+  )
+  ON CONFLICT (clerk_user_id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email,
+    updated_at = NOW()
+  RETURNING id
+`;  // ← THIS MUST BE HERE
 
       console.log('✅ User inserted:', result);
       return res.status(200).json({ success: true, userId: id });
