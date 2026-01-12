@@ -1,21 +1,25 @@
 import { Webhook } from 'svix';
 import { neon } from '@neondatabase/serverless';
 
-export default async function handler(req: any, res: any) {
-  console.log('🔔 Webhook received:', req.method, req.url);
-  console.log('📋 Headers:', req.headers);
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-  // Allow Clerk's webhook validation
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, svix-id, svix-timestamp, svix-signature');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+async function buffer(readable: any) {
+  const chunks = [];
+  for await (const chunk of readable) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  
+  return Buffer.concat(chunks);
+}
+
+export default async function handler(req: any, res: any) {
+  console.log('🔔 Webhook received:', req.method);
+
   if (req.method !== 'POST') {
-    console.log('❌ Method not allowed:', req.method);
+    console.log('❌ Method not allowed');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -25,28 +29,14 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: 'Webhook secret not configured' });
   }
 
-  let payload: string;
-  try {
-    // Handle body parsing
-    if (typeof req.body === 'string') {
-      payload = req.body;
-    } else if (Buffer.isBuffer(req.body)) {
-      payload = req.body.toString();
-    } else {
-      payload = JSON.stringify(req.body);
-    }
-  } catch (err) {
-    console.error('❌ Failed to parse body:', err);
-    return res.status(400).json({ error: 'Invalid body' });
-  }
-
+  const payload = (await buffer(req)).toString();
   const headers = {
-    'svix-id': req.headers['svix-id'] as string,
-    'svix-timestamp': req.headers['svix-timestamp'] as string,
-    'svix-signature': req.headers['svix-signature'] as string,
+    'svix-id': req.headers['svix-id'],
+    'svix-timestamp': req.headers['svix-timestamp'],
+    'svix-signature': req.headers['svix-signature'],
   };
 
-  console.log('📋 Svix headers:', headers);
+  console.log('📋 Headers received:', headers);
 
   let event;
   try {
@@ -62,7 +52,7 @@ export default async function handler(req: any, res: any) {
   if (event.type === 'user.created') {
     console.log('👤 User created event received');
     const { id, email_addresses, first_name, last_name } = event.data;
-    
+
     const email = email_addresses?.[0]?.email_address || '';
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
 
@@ -76,51 +66,43 @@ export default async function handler(req: any, res: any) {
       }
 
       const sql = neon(DATABASE_URL);
-      
+
       console.log('💾 Inserting user into Neon...');
-      
+
+      // Insert user into Neon
       const result = await sql`
-        INSERT INTO user_profiles (
-          id, 
-          full_name, 
-          email, 
-          phone, 
-          resume_content, 
-          resume_file_name,
-          preferences, 
-          connected_accounts, 
-          plan,
-          daily_ai_credits,
-          total_ai_used,
-          onboarded_at,
-          updated_at
-        ) VALUES (
-          ${id},
-          ${fullName},
-          ${email},
-          '',
-          '',
-          '',
-          '{"targetRoles":[],"targetLocations":[],"minSalary":"","remoteOnly":false,"language":"en"}',
-          '[]',
-          'pro',
-          100,
-          0,
-          NOW(),
-          NOW()
-        )
-        ON CONFLICT (id) DO NOTHING
-        RETURNING id
-      `;
+      id,
+      clerk_user_id,
+      full_name,
+      email,
+      plan,
+      daily_ai_credits,
+      total_ai_used,
+      updated_at
+    ) VALUES (
+      gen_random_uuid(),
+      ${id},
+      ${fullName},
+      ${email},
+      'free',
+      5,
+      0,
+      NOW()
+    )
+    ON CONFLICT (clerk_user_id) DO UPDATE SET
+      full_name = EXCLUDED.full_name,
+      email = EXCLUDED.email,
+      updated_at = NOW()
+    RETURNING id;
 
       console.log('✅ User inserted:', result);
       return res.status(200).json({ success: true, userId: id });
     } catch (error: any) {
-      console.error('❌ Database error:', error.message);
+      console.error('❌ Database error:', error.message, error.stack);
       return res.status(500).json({ error: 'Database error', details: error.message });
     }
   }
 
-  console.log('ℹ️ Event received:', event.type);
-  return res.status(200).json({ received: true, type: event.type });
+  console.log('ℹ️ Event type not handled:', event.type);
+  return res.status(200).json({ received: true });
 }
