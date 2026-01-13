@@ -1,0 +1,7 @@
+{
+  "name": "JobFlow AI Pro v3.3",
+  "description": "Fixed db connection issues. fixing add job url issue",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
