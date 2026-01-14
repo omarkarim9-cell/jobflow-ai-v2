@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 dist
 .env
@@ -7,3 +8,14 @@ dist
 .DS_Store
 .vercel
 .env*.local
+=======
+node_modules
+dist
+.env
+.env.local
+.npmrc
+*.log
+.DS_Store
+.vercel
+.env*.local
+>>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
