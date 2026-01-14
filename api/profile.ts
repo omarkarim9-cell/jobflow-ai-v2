@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import postgres from 'postgres';
 import type { UserProfile } from '../types';
@@ -144,4 +144,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Server error', details: error.message });
   }
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

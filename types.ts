@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 // types.ts
 
 export interface UserPreferences {
@@ -60,4 +60,4 @@ export interface UserProfile {
   totalAiUsed: number;
   updatedAt?: string | Date;
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

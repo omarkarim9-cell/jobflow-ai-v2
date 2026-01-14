@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -116,4 +116,4 @@ Return only the tailored resume text.`;
     return res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

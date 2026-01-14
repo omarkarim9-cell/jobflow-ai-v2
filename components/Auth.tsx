@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React from 'react';
 import { SignIn, SignUp } from '@clerk/clerk-react';
 import { Briefcase, ShieldCheck } from 'lucide-react';
@@ -176,5 +176,5 @@ export const Auth: React.FC<AuthProps> = () => {
       </div>
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129
 };

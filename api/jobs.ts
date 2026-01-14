@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Job } from '../types';
 import { JobStatus } from '../types';
@@ -478,4 +478,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

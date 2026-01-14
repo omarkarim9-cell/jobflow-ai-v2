@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Loader2, Navigation, ExternalLink } from 'lucide-react';
@@ -208,4 +208,4 @@ export const JobMap: React.FC<JobMapProps> = ({ onImport, targetRole }) => {
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

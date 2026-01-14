@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
@@ -360,4 +360,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+

@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 /**
  * Local AI Service
@@ -152,4 +152,4 @@ export const localExtractJobs = (html: string, userKeywords: string[] = []): any
     });
     return Array.from(new Map(jobs.map(item => [item.applicationUrl, item])).values()).slice(0, 10); 
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

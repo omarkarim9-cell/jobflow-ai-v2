@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 export type LanguageCode = 'en' | 'es' | 'fr' | 'de' | 'ar';
 
@@ -916,4 +916,4 @@ export const translations = {
     click_upload: 'انقر لتحميل ملف .txt'
   }
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

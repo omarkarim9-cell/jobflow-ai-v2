@@ -1,16 +1,16 @@
-<<<<<<< HEAD
+ 
 {
   "name": "JobFlow AI Pro v3.3",
   "description": "Fixed db connection issues. fixing add job url issue",
   "requestFramePermissions": [
     "geolocation"
   ]
-=======
+
 {
   "name": "JobFlow AI Pro v3.3",
   "description": "Fixed db connection issues. fixing add job url issue",
   "requestFramePermissions": [
     "geolocation"
   ]
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129
 }

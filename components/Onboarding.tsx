@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState, useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { UserProfile } from '../types';
@@ -470,5 +470,5 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onDirHandleC
       </div>
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

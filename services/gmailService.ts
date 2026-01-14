@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 /**
  * Service to interact with Gmail API using OAuth Access Token.
@@ -326,5 +326,5 @@ export const decodeEmailBody = (messageData: any): string => {
   }
   
   return '';
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

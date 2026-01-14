@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState, useEffect } from 'react';
 import { EmailAccount } from '../types';
 import { X, ShieldCheck, Loader2, ExternalLink, Copy, Check, Info, Key, Clock } from 'lucide-react';
@@ -796,5 +796,5 @@ export const EmailConnectModal: React.FC<EmailConnectModalProps> = ({ isOpen, on
       </div>
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

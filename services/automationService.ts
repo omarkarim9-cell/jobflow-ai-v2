@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import { Job, UserProfile } from '../types';
 import { getSmartApplicationUrl } from './geminiService';
 
@@ -316,5 +316,5 @@ export const openSafeApplicationUrl = async (job: Job, explicitUrl?: string) => 
     const showFallback = !isSearchFallback;
 
     newWindow.document.write(getIntermediatePageHtml(url, pageTitle, pageBody, showFallback, searchUrl));
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

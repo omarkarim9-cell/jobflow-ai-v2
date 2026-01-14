@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState, useMemo } from 'react';
 import { Job, JobStatus } from '../types';
 import { Search, ExternalLink, Trash2, ArrowUpDown, Archive, CheckCircle2, Clock, XCircle, Briefcase } from 'lucide-react';
@@ -418,5 +418,5 @@ export const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({ jobs, on
       </div>
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129
 };

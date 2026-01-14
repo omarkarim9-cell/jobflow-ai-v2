@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, JobStatus, EmailAccount, UserPreferences, isSubscriptionValid, UserProfile } from '../types';
@@ -994,4 +994,4 @@ export const InboxScanner: React.FC<InboxScannerProps> = ({
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

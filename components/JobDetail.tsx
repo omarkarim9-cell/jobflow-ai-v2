@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
@@ -386,4 +386,4 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, userProfile, onUpdate
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

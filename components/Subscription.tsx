@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState } from 'react';
 import { UserProfile, isSubscriptionValid } from '../types';
 import { Check, Star, CreditCard, ShieldCheck, Loader2, X, FileText, Info, Clock, AlertTriangle } from 'lucide-react';
@@ -608,5 +608,5 @@ export const Subscription: React.FC<SubscriptionProps> = ({ userProfile, onUpdat
       )}
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

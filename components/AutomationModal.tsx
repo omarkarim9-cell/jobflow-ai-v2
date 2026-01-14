@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, UserProfile } from '../types';
@@ -374,4 +374,4 @@ export const AutomationModal: React.FC<AutomationModalProps> = ({ isOpen, onClos
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

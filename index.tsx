@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
@@ -271,5 +269,4 @@ if (rootElement) {
             <ConfigurationGuard />
         </React.StrictMode>
     );
-}
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+} 45a145927e075b37a66e9b4d7b268d3499230129

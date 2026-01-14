@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Job, JobStatus, ViewState, UserProfile, EmailAccount } from '../types';
@@ -860,4 +860,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

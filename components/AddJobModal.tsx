@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState } from 'react';
 import { Job, JobStatus } from '../types';
 import { X, Link as LinkIcon, Loader2, Sparkles, Edit3 } from 'lucide-react';
@@ -674,5 +674,5 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd
       </div>
     </div>
   );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129
 };

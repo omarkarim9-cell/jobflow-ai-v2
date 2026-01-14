@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import { useAuth } from "@clerk/clerk-react";
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -370,5 +370,5 @@ if (!clerkKey) {
             </ClerkProvider>
         </React.StrictMode>
     );
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 }

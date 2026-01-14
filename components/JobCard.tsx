@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React from 'react';
 import { Job, JobStatus } from '../types';
@@ -332,4 +332,4 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick, isSelected, isCh
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

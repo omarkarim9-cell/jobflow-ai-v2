@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { 
@@ -230,4 +230,4 @@ export const UserManual: React.FC<UserManualProps> = ({ userProfile }) => {
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

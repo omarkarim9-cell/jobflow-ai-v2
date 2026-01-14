@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import { GoogleGenAI } from "@google/genai";
 
 export const findJobLink = async (title: string, company: string): Promise<string | null> => {
@@ -114,5 +114,5 @@ export const findJobLink = async (title: string, company: string): Promise<strin
     console.error("AI Link Discovery Failed:", error);
     return null;
   }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 };

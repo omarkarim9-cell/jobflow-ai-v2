@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useEffect } from 'react';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
@@ -78,4 +78,4 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({ message, t
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

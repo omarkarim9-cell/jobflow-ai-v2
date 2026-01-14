@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 
 import React, { useState } from 'react';
 import { MessageSquare, Send, CheckCircle, LifeBuoy } from 'lucide-react';
@@ -238,4 +238,4 @@ export const Support: React.FC = () => {
     </div>
   );
 };
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129

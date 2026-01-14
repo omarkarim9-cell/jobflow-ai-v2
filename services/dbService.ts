@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import { Job, UserProfile, UserPreferences } from '../types';
 
 /**
@@ -300,5 +300,5 @@ export const deleteJobFromDb = async (jobId: string, clerkToken: string) => {
     }
 };
 
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+   45a145927e075b37a66e9b4d7b268d3499230129
 export const isProductionMode = () => true;

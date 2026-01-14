@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import { Webhook } from 'svix';
 import { neon } from '@neondatabase/serverless';
 
@@ -182,4 +182,4 @@ export default async function handler(req: any, res: any) {
   console.log('ℹ️ Event type not handled:', event.type);
   return res.status(200).json({ received: true });
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129

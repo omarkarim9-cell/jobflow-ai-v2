@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+ 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import postgres from 'postgres';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -132,4 +132,4 @@ Return valid JSON only.`
     return res.status(500).json({ error: 'Extraction failed', details: error.message });
   }
 }
->>>>>>> 45a145927e075b37a66e9b4d7b268d3499230129
+  45a145927e075b37a66e9b4d7b268d3499230129
