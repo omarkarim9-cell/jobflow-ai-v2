@@ -1,166 +1,72 @@
-// pages/api/profile.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import postgres from 'postgres';
-import { UserProfile } from '../../types'; // adjust relative path
+import type { UserProfile } from '../types';
 
-// just added
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  console.log('🔍 PROFILE BODY:', JSON.stringify(body, null, 2));  // ADD THIS
-  const userId = body.data?.id || body.id;
-  console.log('🔍 USER ID:', userId);  // ADD THIS
+const sql = postgres(process.env.DATABASE_URL!, { ssl: 'require' });
 
-const sql = postgres(process.env.DATABASE_URL as string, {
-  ssl: 'require',
-});
-
-// Row type returned from Neon
-interface ProfileRow {
-  id: number;
-  clerk_user_id: string;
-  full_name: string;
-  email: string;
-  phone: string;
-  resume_content: string;
-  resume_file_name: string;
-  preferences: any;
-  connected_accounts: any;
-  plan: string;
-  daily_ai_credits: number;
-  total_ai_used: number;
-  updated_at: Date;
-}
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const userId = req.headers['x-clerk-user-id'] as string | undefined;
+    const userId = req.headers['x-clerk-user-id'] as string;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: missing user id' });
+      return res.status(401).json({ error: 'Missing user ID' });
     }
 
+    // GET profile
     if (req.method === 'GET') {
-      const rows = await sql<ProfileRow[]>`
-        SELECT
-          id,
-          clerk_user_id,
-          full_name,
-          email,
-          phone,
-          resume_content,
-          resume_file_name,
-          preferences,
-          connected_accounts,
-          plan,
-          daily_ai_credits,
-          total_ai_used,
-          updated_at
-        FROM profiles
-        WHERE clerk_user_id = ${userId}
-        LIMIT 1
-      `;
+      const rows = await sql`SELECT * FROM profiles WHERE clerk_user_id = ${userId} LIMIT 1`;
 
       if (!rows.length) {
         return res.status(200).json(null);
       }
 
       const row = rows[0];
-
       const profile: UserProfile = {
         id: row.clerk_user_id,
         fullName: row.full_name || '',
         email: row.email || '',
-        phone: row.phone || '',
-        resumeContent: row.resume_content || '',
-        resumeFileName: row.resume_file_name || '',
-        preferences: row.preferences || {
-          targetRoles: [],
-          targetLocations: [],
-          minSalary: '',
-          remoteOnly: false,
-          language: 'en',
-        },
+        phone: row.phone || '',                    // ✅ Added
+        resumeContent: row.resume_content || '',   // ✅ Added  
+        resumeFileName: row.resume_file_name || '', // ✅ Added
+        preferences: row.preferences || {},
         connectedAccounts: row.connected_accounts || [],
         plan: row.plan || 'free',
-        dailyAiCredits: row.daily_ai_credits ?? 0,
-        totalAiUsed: row.total_ai_used ?? 0,
-        updatedAt: row.updated_at,
+        dailyAiCredits: row.daily_ai_credits || 0,
+        totalAiUsed: row.total_ai_used || 0,
       };
 
       return res.status(200).json(profile);
     }
-    if (req.method === 'POST') {
-      const body = req.body as UserProfile;
 
-      // 🔧 CLERK WEBHOOK DATA MAPPING
-      const clerkUserId = req.headers['x-clerk-user-id'] as string || body.data?.id || body.id;
+    // POST - create/update profile (Clerk webhook)
+    if (req.method === 'POST') {
+      const body = req.body as any;
       const email = body.data?.email_addresses?.[0]?.email_address || body.email || '';
       const fullName = body.data?.full_name || body.fullName || '';
 
-      console.log('🔍 WEBHOOK DATA:', { clerkUserId, email, fullName });
-
-      // Normalize JSON fields
-      const prefs = body.preferences && typeof body.preferences === 'object'
-        ? body.preferences
-        : { targetRoles: [], targetLocations: [], minSalary: '', remoteOnly: false, language: 'en' };
-
-      const connected = Array.isArray(body.connectedAccounts) ? body.connectedAccounts : [];
-
-      // 🔧 NEON PARAMS FIX - explicit positional params
-      const query = `
-        INSERT INTO profiles (
-          clerk_user_id, full_name, email, phone, resume_content, resume_file_name,
-          preferences, connected_accounts, plan, daily_ai_credits, total_ai_used, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, NOW())
+      const rows = await sql`
+        INSERT INTO profiles (clerk_user_id, full_name, email, updated_at)
+        VALUES (${userId}, ${fullName}, ${email}, NOW())
         ON CONFLICT (clerk_user_id) DO UPDATE SET
-          full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone = EXCLUDED.phone,
-          resume_content = EXCLUDED.resume_content, resume_file_name = EXCLUDED.resume_file_name,
-          preferences = EXCLUDED.preferences, connected_accounts = EXCLUDED.connected_accounts,
-          plan = EXCLUDED.plan, daily_ai_credits = EXCLUDED.daily_ai_credits,
-          total_ai_used = EXCLUDED.total_ai_used, updated_at = NOW()
+          full_name = EXCLUDED.full_name,
+          email = EXCLUDED.email,
+          updated_at = NOW()
         RETURNING *
       `;
 
-      const rows = await sql < ProfileRow[] > [query,
-        clerkUserId,
-        fullName,
-        email,
-        '', '', '',  // phone, resume fields empty
-        prefs,
-        connected,
-        'free',
-        0,
-        0
-      ];
-
-      const row = rows[0];
-      const saved: UserProfile = {
-        id: row.clerk_user_id,
-        fullName: row.full_name || '',
-        email: row.email || '',
-        phone: row.phone || '',
-        resumeContent: row.resume_content || '',
-        resumeFileName: row.resume_file_name || '',
-        preferences: row.preferences || prefs,
-        connectedAccounts: row.connected_accounts || connected,
-        plan: row.plan || 'free',
-        dailyAiCredits: row.daily_ai_credits ?? 0,
-        totalAiUsed: row.total_ai_used ?? 0,
-        updatedAt: row.updated_at,
-      };
-
-      return res.status(200).json(saved);
+      return res.status(200).json(rows[0]);
     }
-        }
 
-    res.setHeader('Allow', ['GET', 'POST']);
+    // DELETE profile
+    if (req.method === 'DELETE') {
+      await sql`DELETE FROM profiles WHERE clerk_user_id = ${userId}`;
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
-  } catch (err: any) {
-    console.error('[PROFILE] Error:', err?.message || err);
-    return res.status(500).json({ error: 'Internal server error' });
+
+  } catch (error: any) {
+    console.error('[PROFILE API]', error);
+    return res.status(500).json({ error: 'Server error', details: error.message });
   }
 }

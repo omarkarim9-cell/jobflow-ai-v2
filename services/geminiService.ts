@@ -1,229 +1,267 @@
-// services/geminiService.ts
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Job, JobStatus } from '../types';
+
+const getModel = (modelName: string) => {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set');
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ model: modelName });
+};
 
 /**
- * JobFlow AI Gemini Service
+ * Generates a tailored cover letter using the Gemini model.
  */
-
-// TOP OF FILE - PROPER WAY
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-export async function analyzeSyncIssue(context: string) {
- 
+export const generateCoverLetter = async (
+  title: string,
+  company: string,
+  description: string,
+  resume: string,
+  name: string,
+  email: string
+): Promise<string> => {
   try {
-    // Import Google Generative AI
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = getModel('gemini-1.5-flash');
 
-    // Get the model
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-pro',
-      generationConfig: {
-        temperature: 0.7,
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 2048,
+    const isPlaceholder =
+      !company ||
+      company.toLowerCase().includes('review') ||
+      company.toLowerCase().includes('unknown') ||
+      company.toLowerCase().includes('site') ||
+      company.toLowerCase().includes('description');
+
+    const prompt = `Write a professional, high-impact cover letter for the ${title} position.
+
+CONTEXT:
+- Target Company: ${isPlaceholder
+        ? 'Carefully scan the job description below to identify the actual company name. If not found, use "Hiring Manager".'
+        : company
       }
+- Candidate: ${name} (${email})
+- Job Title: ${title}
+- Job Description: ${description}
+- Candidate Resume: ${resume}
+
+REQUIREMENTS:
+1. Keep cover letter under 400 words
+2. Match candidate skills to job requirements
+3. NEVER use placeholder text like "Review Required", "Unknown Company", "Check Site", or "Check Description"
+4. Use professional tone and ATS-friendly formatting
+5. Include specific accomplishments from resume that align with job requirements`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text() || '';
+  } catch (error: any) {
+    console.error('[generateCoverLetter] Error:', error.message);
+    return `Cover letter generation failed: ${error.message}`;
+  }
+};
+
+/**
+ * Customizes a resume based on the job description.
+ */
+export const customizeResume = async (
+  title: string,
+  company: string,
+  description: string,
+  resume: string,
+  email: string
+): Promise<string> => {
+  try {
+    const model = getModel('gemini-1.5-flash');
+
+    const isPlaceholder =
+      !company ||
+      company.toLowerCase().includes('review') ||
+      company.toLowerCase().includes('unknown');
+
+    const prompt = `Tailor this resume for a ${title} role at ${isPlaceholder ? 'the target company' : company
+      }.
+
+Email: ${email}
+
+Original Resume:
+${resume}
+
+Job Description:
+${description}
+
+INSTRUCTIONS:
+1. Reorder experience to highlight relevant skills first
+2. Adapt bullet points to match job description keywords
+3. Emphasize achievements with metrics (e.g., increased by X%, saved Y hours)
+4. Keep the same length and structure
+5. Focus on ATS optimization with proper formatting`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text() || '';
+  } catch (error: any) {
+    console.error('[customizeResume] Error:', error.message);
+    return `Resume customization failed: ${error.message}`;
+  }
+};
+
+/**
+ * Extracts job details from URL via server-side API.
+ */
+export const extractJobFromUrl = async (
+  url: string
+): Promise<{ data: any; sources: any[] }> => {
+  try {
+    console.log('[extractJobFromUrl] Extracting from URL:', url);
+
+    const res = await fetch('/api/extract-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
     });
 
-    const prompt = `You are a senior systems architect. Solve this Clerk-to-Neon sync issue for JobFlow AI.
-    
-USER PROBLEM:
-- User is created in Clerk but not in Neon database.
-- User sees old session data even after deleting Neon rows.
+    if (!res.ok) {
+      console.error('[extractJobFromUrl] API failed:', res.status);
+      return {
+        data: {
+          title: 'Extraction Failed',
+          company: 'Unknown',
+          location: 'Remote',
+          salaryRange: '',
+          description: 'Job extraction API error. Please enter details manually.',
+          requirements: [],
+        },
+        sources: [],
+      };
+    }
 
-TECHNICAL CAUSE:
-1. The Clerk 'user.created' webhook is likely missing or failing.
-2. Stale data persists because Clerk JWTs (sessions) in the browser are independent of the Neon Postgres state.
-
-OUTPUT JSON FORMAT:
-{
-  "explanation": "Brief clear text explaining the disconnect.",
-  "routeHandler": "Full API route code for api/webhooks/clerk.ts using svix and neon",
-  "steps": ["Step 1...", "Step 2..."]
-}
-
-Context: ${context}
-
-Return ONLY valid JSON, no markdown or code blocks.`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    // Clean up response (remove markdown if present)
-    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
-    return JSON.parse(cleanText);
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    throw new Error(`Failed to analyze sync issue: ${error}`);
-  }
-}
-
-// Add other helper functions if needed
-export async function generateCoverLetter(jobData: any, resumeData: string) {
-  if (!apiKey) {
-    throw new Error("VITE_GEMINI_API_KEY is missing");
-  }
-
-  try {
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-
-    const prompt = `Generate a professional cover letter for this job:\n${JSON.stringify(jobData)}\n\nResume: ${resumeData}`;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    throw error;
+    const result = await res.json();
+    console.log('[extractJobFromUrl] Success:', result.data.title);
+    return result;
+  } catch (error: any) {
+    console.error('[extractJobFromUrl] Error:', error);
+    return {
+      data: {
+        title: 'Extraction Failed',
+        company: 'Unknown',
+        location: 'Remote',
+        salaryRange: '',
+        description: `Error: ${error.message}. Please enter details manually.`,
+        requirements: [],
+      },
+      sources: [],
+    };
   }
 };
-// ADD THIS TO THE BOTTOM OF YOUR EXISTING geminiService.ts (before final export if any)
 
-// Smart application URL generator - handles all job formats
-export interface SmartUrlJob {
-  applicationUrl?: string;
-  applyUrl?: string;
-  companyUrl?: string;
-  companyDomain?: string;
-  companySlug?: string;
-  jobBoardUrl?: string;
-  ats?: string;
-  jobId?: string;
-}
+/**
+ * Extracts multiple job listings from email HTML.
+ */
+export const extractJobsFromEmailHtml = async (
+  html: string
+): Promise<
+  {
+    title: string;
+    company: string;
+    location: string;
+    salaryRange: string;
+    description: string;
+    applicationUrl: string;
+  }[]
+> => {
+  try {
+    const model = getModel('gemini-1.5-flash');
 
-export const getSmartApplicationUrl = (job: SmartUrlJob): string => {
-  // 1. Direct application links (highest priority)
-  if (job.applicationUrl) return job.applicationUrl;
-  if (job.applyUrl) return job.applyUrl;
+    const prompt = `Extract ALL job postings from this email HTML. Return ONLY a valid JSON array of objects.
 
-  // 2. Job board links
-  if (job.jobBoardUrl) return job.jobBoardUrl;
+Each object must have these EXACT keys:
+- title (string): Job title
+- company (string): Company name
+- location (string): Job location or "Remote"
+- salaryRange (string): Salary range or empty string
+- description (string): Job description (max 500 chars)
+- applicationUrl (string): Application link or empty string
 
-  // 3. ATS platform patterns (Workable, Greenhouse, Lever)
-  if (job.ats === 'workable' && job.companySlug) {
-    return `https://apply.workable.com/${job.companySlug}${job.jobId ? `/j/${job.jobId}` : ''}`;
-  }
-  if (job.ats === 'greenhouse' && job.companyDomain) {
-    return `https://${job.companyDomain}/greenhouse${job.jobId ? `/${job.jobId}` : ''}`;
-  }
-  if (job.ats === 'lever' && job.companyDomain) {
-    return `https://${job.companyDomain}/lever${job.jobId ? `/jobs/${job.jobId}` : ''}`;
-  }
+HTML Content:
+${html}
 
-  // 4. Company career pages
-  if (job.companyUrl) {
+IMPORTANT: Return ONLY valid JSON array, no other text.`;
+
+    const result = await model.generateContent(prompt);
+
     try {
-      const domain = new URL(job.companyUrl).hostname;
-      return `https://${domain}/careers` ||
-        `https://${domain}/jobs` ||
-        `https://${domain}/careers/open-positions` ||
-        job.companyUrl;
-    } catch {
-      return job.companyUrl || '#';
+      const text = result.response.text();
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch : text);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (parseError) {
+      console.error('[extractJobsFromEmailHtml] Parse error:', parseError);
+      return [];
     }
+  } catch (error: any) {
+    console.error('[extractJobsFromEmailHtml] Error:', error.message);
+    return [];
   }
-
-  // 5. Final fallback
-  return '#';
 };
 
-// ADD THIS - extractJobFromUrl for AddJobModal
-export const extractJobFromUrl = async (url: string): Promise<any> => {
+/**
+ * URL cleaning helper - removes tracking parameters.
+ */
+export const getSmartApplicationUrl = (
+  url: string,
+  title?: string,
+  company?: string
+): string => {
   try {
-    const prompt = `Extract job details from this URL: ${url}. Return JSON only with these fields: {
-      "title": "Job title",
-      "company": "Company name", 
-      "location": "Location",
-      "url": "${url}",
-      "description": "Short description"
-    }`;
-
-    const apiKey = 'demo-gemini-key-for-dev';
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ parts: [{ text: prompt }] }])
-      }
-    );
-
-    const data = await response.json();
-    const text = data.candidates[0].content.parts[0].text;
-
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{.*\}/s);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return null;
+    const u = new URL(url);
+    const paramsToRemove = [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'ref',
+      'source',
+      'click_id',
+      'fbclid',
+      'gclid',
+    ];
+    paramsToRemove.forEach((p) => u.searchParams.delete(p));
+    return u.toString();
   } catch (error) {
-    console.error('Job extraction failed:', error);
-    return null;
+    console.error('[getSmartApplicationUrl] Invalid URL:', url);
+    return url;
   }
 };
-// ===== MISSING EXPORTS FOR JobDetail.tsx =====
 
-// 1. customizeResume - AI resume tailoring
-export const customizeResume = async (jobDescription: string, resumeText: string): Promise<string> => {
+/**
+ * Generates match score between job and user profile.
+ */
+export const calculateJobMatchScore = async (
+  jobDescription: string,
+  userResume: string,
+  userPreferences: { targetRoles?: string[]; targetLocations?: string[] }
+): Promise<number> => {
   try {
-    const prompt = `Tailor this resume for job: "${jobDescription.substring(0, 500)}...".
-    Original resume: ${resumeText.substring(0, 2000)}
-    Return ONLY improved resume text.`;
-    
-    const apiKey = 'demo-gemini-key-for-dev';
+    const model = getModel('gemini-1.5-flash');
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ parts: [{ text: prompt }] }])
-      }
-    );
-    
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
-  } catch {
-    return resumeText; // Return original if fails
+    const prompt = `Rate the match between this job and the candidate on a scale of 0-100.
+
+Job Description:
+${jobDescription}
+
+Candidate Resume:
+${userResume}
+
+Target Roles: ${userPreferences.targetRoles?.join(', ') || 'Any'}
+Target Locations: ${userPreferences.targetLocations?.join(', ') || 'Any'}
+
+Return ONLY a single number between 0-100.`;
+
+    const result = await model.generateContent(prompt);
+    const scoreText = result.response.text().trim();
+    const score = parseInt(scoreText, 10);
+
+    return isNaN(score) ? 50 : Math.min(100, Math.max(0, score));
+  } catch (error: any) {
+    console.error('[calculateJobMatchScore] Error:', error.message);
+    return 50;
   }
 };
-
-// 2. fetchAudioBriefing - Text-to-speech job brief
-export const fetchAudioBriefing = async (job: any): Promise<string> => {
-  // Mock audio URL - replace with real TTS service later
-  return 'https://example.com/audio-briefing.mp3';
-};
-
-// 3. fetchInterviewQuestions - AI interview prep
-export const fetchInterviewQuestions = async (jobTitle: string, company: string): Promise<string[]> => {
-  try {
-    const prompt = `Generate 5 behavioral interview questions for ${jobTitle} role at ${company}.
-    Return JSON array only: ["question1", "question2", ...]`;
-    
-    const apiKey = 'demo-gemini-key-for-dev';
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ parts: [{ text: prompt }] }])
-      }
-    );
-    
-    const data = await response.json();
-    const text = data.candidates[0].content.parts[0].text;
-    const jsonMatch = text.match(/\[.*\]/s);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-  } catch {
-    return ["Tell me about yourself", "Why this company?", "Strengths & weaknesses"];
-  }
-};
-
-// ===== END MISSING EXPORTS =====
