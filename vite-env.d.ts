@@ -1,12 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_GEMINI_API_KEY: string;
-  readonly VITE_CLERK_PUBLISHABLE_KEY: string;
-  readonly VITE_CLERK_WEBHOOK_SECRET: string;
-  readonly VITE_NEON_URL: string;
+  readonly VITE_APP_TITLE: string
+  // more env variables can be defined here
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv;
+  readonly env: ImportMetaEnv
 }
