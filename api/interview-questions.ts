@@ -1,4 +1,3 @@
- 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -140,4 +139,3 @@ Return VALID JSON only.`;
       .json({ error: error.message || 'Failed to generate interview questions' });
   }
 }
-  45a145927e075b37a66e9b4d7b268d3499230129
